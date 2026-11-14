@@ -49,11 +49,11 @@ export function AgentCreationForm({
   const [systemPrompt, setSystemPrompt] = useState(
     selectedTemplate?.default_system_prompt_fr || ''
   );
-  const [aiProvider, setAiProvider] = useState<string>('openrouter');
-  const [aiModel, setAiModel] = useState<string>('meta-llama/llama-3.3-70b-instruct');
+  const [aiProvider, setAiProvider] = useState<string>('gemini');
+  const [aiModel, setAiModel] = useState<string>('gemini-2.0-flash');
   const [temperature, setTemperature] = useState<number>(0.7);
   const [selectedCredentialId, setSelectedCredentialId] = useState<string>(
-    credentials[0]?.id || ''
+    credentials.find((c) => c.provider === 'gemini')?.id || credentials[0]?.id || ''
   );
   const [isMemoryEnabled, setIsMemoryEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -248,25 +248,25 @@ export function AgentCreationForm({
             <select
               value={aiProvider}
               onChange={(e) => handleProviderChange(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-200 py-2 px-3 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
+              className="mt-1 w-full rounded-xl border border-slate-200 py-2.5 px-3 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white min-h-[44px]"
             >
-              <option value="openrouter">OpenRouter</option>
-              <option value="groq">Groq (Ultra-Rapide)</option>
-              <option value="gemini">Google Gemini</option>
-              <option value="openai">OpenAI</option>
+              <option value="gemini">Google Gemini (Gratuit + Vision)</option>
+              <option value="groq">Groq Cloud (Gratuit + Ultra-Rapide)</option>
+              <option value="openrouter">OpenRouter (100% Modèles Gratuits)</option>
+              <option value="openai">OpenAI (Multimodal GPT)</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700">Modèle</label>
+            <label className="block text-xs font-semibold text-slate-700">Modèle Recommandé</label>
             <select
               value={aiModel}
               onChange={(e) => setAiModel(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-200 py-2 px-3 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
+              className="mt-1 w-full rounded-xl border border-slate-200 py-2.5 px-3 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white min-h-[44px]"
             >
               {currentModels.map((m: any) => (
                 <option key={m.id} value={m.id}>
-                  {m.name}
+                  {m.name} {m.isVision ? '👁️ [Vision]' : ''} {m.isFree ? '✨ [Gratuit]' : ''}
                 </option>
               ))}
             </select>

@@ -42,7 +42,9 @@ export function AgentConfigClient({
   const [description, setDescription] = useState(agent.description || '');
   const [language, setLanguage] = useState(agent.primary_language);
   const [systemPrompt, setSystemPrompt] = useState(agent.system_prompt);
-  const [personalityTraits, setPersonalityTraits] = useState(agent.personality_traits.join(', '));
+  const [personalityTraits, setPersonalityTraits] = useState(
+    Array.isArray(agent.personality_traits) ? agent.personality_traits.join(', ') : ''
+  );
   const [status, setStatus] = useState(agent.status);
 
   // Intelligence State
@@ -53,7 +55,9 @@ export function AgentConfigClient({
   const [isMemoryEnabled, setIsMemoryEnabled] = useState(agent.is_memory_enabled);
 
   // WhatsApp Pairing State
-  const initialWa = agent.whatsapp_connections;
+  const initialWa = Array.isArray(agent.whatsapp_connections)
+    ? agent.whatsapp_connections[0]
+    : agent.whatsapp_connections;
   const [phoneNumber, setPhoneNumber] = useState(initialWa?.phone_number || '+237');
   const [pairingCode, setPairingCode] = useState<string | null>(initialWa?.pairing_code || null);
   const [waStatus, setWaStatus] = useState(initialWa?.status || 'pending');
@@ -288,11 +292,11 @@ export function AgentConfigClient({
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="flex border-b border-slate-200 space-x-2">
+      {/* Navigation Tabs (Mobile-Friendly Horizontal Scroll) */}
+      <div className="flex border-b border-slate-200 space-x-2 overflow-x-auto no-scrollbar pb-1">
         <button
           onClick={() => setActiveTab('whatsapp')}
-          className={`flex items-center gap-2 pb-3 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+          className={`flex items-center gap-2 pb-3 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 min-h-[44px] ${
             activeTab === 'whatsapp'
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -304,7 +308,7 @@ export function AgentConfigClient({
 
         <button
           onClick={() => setActiveTab('general')}
-          className={`flex items-center gap-2 pb-3 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+          className={`flex items-center gap-2 pb-3 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 min-h-[44px] ${
             activeTab === 'general'
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -316,7 +320,7 @@ export function AgentConfigClient({
 
         <button
           onClick={() => setActiveTab('instructions')}
-          className={`flex items-center gap-2 pb-3 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+          className={`flex items-center gap-2 pb-3 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 min-h-[44px] ${
             activeTab === 'instructions'
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -328,7 +332,7 @@ export function AgentConfigClient({
 
         <button
           onClick={() => setActiveTab('intelligence')}
-          className={`flex items-center gap-2 pb-3 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+          className={`flex items-center gap-2 pb-3 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 min-h-[44px] ${
             activeTab === 'intelligence'
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -340,7 +344,7 @@ export function AgentConfigClient({
 
         <button
           onClick={() => setActiveTab('knowledge')}
-          className={`flex items-center gap-2 pb-3 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+          className={`flex items-center gap-2 pb-3 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 min-h-[44px] ${
             activeTab === 'knowledge'
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -608,11 +612,11 @@ export function AgentConfigClient({
               <select
                 value={aiModel}
                 onChange={(e) => setAiModel(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-200 py-2 px-3 text-xs text-slate-900 bg-white"
+                className="mt-1 w-full rounded-xl border border-slate-200 py-2 px-3 text-xs text-slate-900 bg-white min-h-[44px]"
               >
                 {currentModels.map((m: any) => (
                   <option key={m.id} value={m.id}>
-                    {m.name}
+                    {m.name} {m.isVision ? '👁️ [Vision]' : ''} {m.isFree ? '✨ [Gratuit]' : ''}
                   </option>
                 ))}
               </select>
