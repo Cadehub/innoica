@@ -3,7 +3,8 @@
 // ====================================================================
 
 import { createWorkerSupabaseClient } from '@innoica/database';
-import { decryptSecret, AIProvider } from '@innoica/shared';
+import { AIProvider } from '@innoica/shared';
+import { decryptSecret } from '@innoica/shared/server';
 import { dispatchLLMCall, LLMMessage } from './adapters/index.js';
 
 export interface GenerateResponseInput {

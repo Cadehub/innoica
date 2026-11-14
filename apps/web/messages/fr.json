@@ -1,0 +1,150 @@
+{
+  "Common": {
+    "appName": "INNOICA WhatsApp Agents",
+    "tagline": "Turn Complexity Into Simplicity",
+    "loading": "Chargement en cours...",
+    "save": "Enregistrer",
+    "saved": "Enregistré avec succès",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "create": "Créer",
+    "confirm": "Confirmer",
+    "actions": "Actions",
+    "status": "Statut",
+    "error": "Une erreur est survenue",
+    "logout": "Déconnexion"
+  },
+  "Nav": {
+    "overview": "Vue d'ensemble",
+    "agents": "Mes Agents",
+    "conversations": "Conversations",
+    "whatsapp": "Connexions WhatsApp",
+    "ai": "Intelligence IA",
+    "knowledge": "Base de Connaissances",
+    "subscription": "Abonnement",
+    "settings": "Paramètres",
+    "admin": "Super Admin"
+  },
+  "Dashboard": {
+    "title": "Tableau de Bord",
+    "welcome": "Bienvenue sur votre espace INNOICA WhatsApp Agents",
+    "totalAgents": "Total Agents",
+    "activeAgents": "Agents Actifs",
+    "connectedWhatsApp": "Comptes WhatsApp",
+    "totalConversations": "Conversations",
+    "messagesProcessed": "Messages Traités",
+    "recentErrors": "Erreurs Récentes",
+    "planStatus": "Abonnement Actuel",
+    "quickActions": "Actions Rapides",
+    "createNewAgent": "Créer un Nouvel Agent",
+    "connectWhatsApp": "Connecter un Numéro",
+    "viewInbox": "Accéder à la Boîte de Réception"
+  },
+  "Agents": {
+    "title": "Gestion des Agents",
+    "subtitle": "Configurez vos agents IA WhatsApp spécialisés pour votre activité",
+    "newAgent": "Nouvel Agent",
+    "chooseTemplate": "Choisir un modèle de départ",
+    "name": "Nom de l'agent",
+    "description": "Description",
+    "language": "Langue principale",
+    "systemPrompt": "Instructions système",
+    "personalityTraits": "Traits de personnalité",
+    "aiProvider": "Fournisseur IA",
+    "aiModel": "Modèle IA",
+    "temperature": "Température (Créativité)",
+    "memoryEnabled": "Activer la mémoire durable du contact",
+    "status": {
+      "draft": "Brouillon",
+      "pending_connection": "En attente de connexion",
+      "connected": "WhatsApp Connecté",
+      "active": "Opérationnel & Actif",
+      "paused": "Suspendu",
+      "error": "Erreur",
+      "disconnected": "Déconnecté"
+    },
+    "tabs": {
+      "general": "Général",
+      "instructions": "Personnalité & Instructions",
+      "intelligence": "Intelligence IA",
+      "whatsapp": "Connexion WhatsApp",
+      "knowledge": "Connaissances",
+      "memory": "Mémoire",
+      "conversations": "Historique"
+    }
+  },
+  "WhatsApp": {
+    "title": "Connexion WhatsApp par Pairing Code",
+    "subtitle": "Associez votre compte WhatsApp de manière sécurisée sans aucun QR Code",
+    "phoneLabel": "Numéro de téléphone WhatsApp (Format international)",
+    "phonePlaceholder": "+237691234567 ou +33612345678",
+    "phoneHelp": "Saisissez votre indicatif international (ex: +237 pour le Cameroun, +33 pour la France).",
+    "generateButton": "Obtenir mon code de connexion",
+    "pairingCodeTitle": "Votre Code d'Association :",
+    "pairingCodeHelp": "Ce code expire dans 10 minutes. Saisissez-le dans l'application WhatsApp.",
+    "steps": {
+      "step1": "Ouvrez WhatsApp sur votre smartphone.",
+      "step2": "Allez dans Réglages (ou Menu ⋮) > Appareils connectés.",
+      "step3": "Touchez 'Associer un appareil'.",
+      "step4": "Touchez en bas 'Associer avec un numéro de téléphone'.",
+      "step5": "Saisissez le code affiché ci-dessus."
+    },
+    "disconnect": "Déconnecter cet appareil",
+    "connectedSuccess": "WhatsApp est connecté avec succès sur ce numéro.",
+    "warningNote": "Avertissement : INNOICA utilise la bibliothèque open-source Baileys. Les conditions d'utilisation de WhatsApp s'appliquent. Le spam est formellement interdit."
+  },
+  "Conversations": {
+    "title": "Boîte de Réception & Contrôle Humain",
+    "search": "Rechercher un contact ou message...",
+    "noConversations": "Aucune conversation enregistrée pour le moment.",
+    "controlMode": "Mode de Contrôle :",
+    "modes": {
+      "ai_active": "IA Active (Réponses automatiques)",
+      "human_takeover": "Reprise Humaine (IA coupée)",
+      "paused": "Suspendu"
+    },
+    "takeoverButton": "Reprendre la main (Couper l'IA)",
+    "resumeAiButton": "Réactiver l'IA",
+    "typeMessagePlaceholder": "Saisissez une réponse manuelle en direct...",
+    "send": "Envoyer"
+  },
+  "AI": {
+    "title": "Clés API des Fournisseurs IA (BYOK)",
+    "subtitle": "Vos clés personnelles sont chiffrées côté serveur avec AES-256-GCM. Aucun coût caché.",
+    "addKey": "Ajouter une Clé API",
+    "provider": "Fournisseur",
+    "label": "Libellé de la clé",
+    "apiKey": "Clé API secrète",
+    "testKey": "Tester la validité",
+    "keyValid": "Clé API valide et opérationnelle",
+    "keyInvalid": "Clé API invalide"
+  },
+  "Knowledge": {
+    "title": "Base de Connaissances & Documents",
+    "subtitle": "Fournissez des informations précises à votre agent (FAQ, textes, pages web)",
+    "addFaq": "Ajouter une FAQ",
+    "addUrl": "Ajouter une URL Web",
+    "addTxt": "Ajouter un Texte",
+    "question": "Question fréquente",
+    "answer": "Réponse détaillée",
+    "urlLabel": "Adresse URL publique (HTTP/HTTPS)",
+    "ssrfProtected": "Protégé contre le SSRF et l'accès aux réseaux internes"
+  },
+  "Subscription": {
+    "title": "Abonnement & Forfaits",
+    "subtitle": "Tarification transparente en FCFA (XAF)",
+    "monthly": "Facturation Mensuelle",
+    "yearly": "Facturation Annuelle (-15%)",
+    "currentPlan": "Votre Plan Actuel",
+    "upgrade": "Changer de forfait"
+  },
+  "Admin": {
+    "title": "Panel Super Admin INNOICA",
+    "subtitle": "Supervision globale de la plateforme, gestion des workspaces et audit technique",
+    "totalUsers": "Utilisateurs Inscrits",
+    "totalWorkspaces": "Workspaces",
+    "systemLogs": "Journaux d'Exécution & Erreurs",
+    "plansConfig": "Configuration des Plans & Quotas"
+  }
+}

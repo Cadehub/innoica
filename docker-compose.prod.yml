@@ -1,0 +1,124 @@
+# ====================================================================
+# INNOICA WhatsApp Agents v2.0 — Production Docker Compose (Contabo VPS)
+# ====================================================================
+
+version: '3.8'
+
+services:
+  # --- Reverse Proxy with automatic HTTPS ---
+  reverse-proxy:
+    image: caddy:2.8-alpine
+    container_name: innoica-reverse-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - whatsapp-worker
+      - ai-runtime
+      - ingestion-worker
+    networks:
+      - innoica-network
+
+  # --- Next.js 15 Web Application (SaaS Dashboard & Admin) ---
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    container_name: innoica-web
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}
+      - WHATSAPP_WORKER_URL=http://whatsapp-worker:4001
+      - AI_RUNTIME_URL=http://ai-runtime:4002
+      - INGESTION_WORKER_URL=http://ingestion-worker:4003
+    networks:
+      - innoica-network
+
+  # --- WhatsApp Worker (Baileys Pairing Code Only) ---
+  whatsapp-worker:
+    build:
+      context: .
+      dockerfile: services/whatsapp-worker/Dockerfile
+    container_name: innoica-whatsapp-worker
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=4001
+      - SESSIONS_DIR=/app/sessions
+      - SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - AI_RUNTIME_URL=http://ai-runtime:4002
+    volumes:
+      - whatsapp_sessions:/app/sessions
+    networks:
+      - innoica-network
+
+  # --- AI Runtime Service (BYOK LLM Orchestrator & Dual Memory) ---
+  ai-runtime:
+    build:
+      context: .
+      dockerfile: services/ai-runtime/Dockerfile
+    container_name: innoica-ai-runtime
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=4002
+      - SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}
+      - WHATSAPP_WORKER_URL=http://whatsapp-worker:4001
+    networks:
+      - innoica-network
+
+  # --- Knowledge Ingestion Worker (Anti-SSRF Web, Text & FAQ) ---
+  ingestion-worker:
+    build:
+      context: .
+      dockerfile: services/ingestion-worker/Dockerfile
+    container_name: innoica-ingestion-worker
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=4003
+      - SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+    networks:
+      - innoica-network
+
+  # --- Redis Queue Cache & Lock ---
+  redis:
+    image: redis:7-alpine
+    container_name: innoica-queue
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - innoica-network
+
+networks:
+  innoica-network:
+    driver: bridge
+
+volumes:
+  whatsapp_sessions:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+  redis_data:
+    driver: local

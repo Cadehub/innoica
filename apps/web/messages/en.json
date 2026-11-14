@@ -1,0 +1,150 @@
+{
+  "Common": {
+    "appName": "INNOICA WhatsApp Agents",
+    "tagline": "Turn Complexity Into Simplicity",
+    "loading": "Loading...",
+    "save": "Save",
+    "saved": "Saved successfully",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "confirm": "Confirm",
+    "actions": "Actions",
+    "status": "Status",
+    "error": "An error occurred",
+    "logout": "Sign Out"
+  },
+  "Nav": {
+    "overview": "Overview",
+    "agents": "My Agents",
+    "conversations": "Conversations",
+    "whatsapp": "WhatsApp Connections",
+    "ai": "AI Intelligence",
+    "knowledge": "Knowledge Base",
+    "subscription": "Subscription",
+    "settings": "Settings",
+    "admin": "Super Admin"
+  },
+  "Dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome to your INNOICA WhatsApp Agents workspace",
+    "totalAgents": "Total Agents",
+    "activeAgents": "Active Agents",
+    "connectedWhatsApp": "WhatsApp Accounts",
+    "totalConversations": "Conversations",
+    "messagesProcessed": "Messages Handled",
+    "recentErrors": "Recent Errors",
+    "planStatus": "Current Subscription",
+    "quickActions": "Quick Actions",
+    "createNewAgent": "Create New Agent",
+    "connectWhatsApp": "Connect a Phone Number",
+    "viewInbox": "Open Inbox"
+  },
+  "Agents": {
+    "title": "Agent Management",
+    "subtitle": "Configure specialized WhatsApp AI agents customized for your organization",
+    "newAgent": "New Agent",
+    "chooseTemplate": "Choose a starter template",
+    "name": "Agent Name",
+    "description": "Description",
+    "language": "Primary Language",
+    "systemPrompt": "System Instructions",
+    "personalityTraits": "Personality Traits",
+    "aiProvider": "AI Provider",
+    "aiModel": "AI Model",
+    "temperature": "Temperature (Creativity)",
+    "memoryEnabled": "Enable durable contact memory",
+    "status": {
+      "draft": "Draft",
+      "pending_connection": "Pending Connection",
+      "connected": "WhatsApp Connected",
+      "active": "Active & Operational",
+      "paused": "Paused",
+      "error": "Error",
+      "disconnected": "Disconnected"
+    },
+    "tabs": {
+      "general": "General",
+      "instructions": "Personality & Instructions",
+      "intelligence": "AI Intelligence",
+      "whatsapp": "WhatsApp Connection",
+      "knowledge": "Knowledge",
+      "memory": "Memory",
+      "conversations": "History"
+    }
+  },
+  "WhatsApp": {
+    "title": "WhatsApp Connection via Pairing Code",
+    "subtitle": "Link your WhatsApp account securely with zero QR code",
+    "phoneLabel": "WhatsApp Phone Number (International format)",
+    "phonePlaceholder": "+237691234567 or +14155552671",
+    "phoneHelp": "Enter your international dialing code (e.g., +237 for Cameroon, +33 for France, +1 for USA).",
+    "generateButton": "Get Pairing Code",
+    "pairingCodeTitle": "Your Pairing Code:",
+    "pairingCodeHelp": "This code expires in 10 minutes. Enter it in the WhatsApp app on your smartphone.",
+    "steps": {
+      "step1": "Open WhatsApp on your mobile phone.",
+      "step2": "Navigate to Settings (or Menu ⋮) > Linked Devices.",
+      "step3": "Tap 'Link a Device'.",
+      "step4": "Tap 'Link with phone number instead' at the bottom.",
+      "step5": "Enter the code shown above."
+    },
+    "disconnect": "Disconnect Device",
+    "connectedSuccess": "WhatsApp is successfully connected to this number.",
+    "warningNote": "Notice: INNOICA connects using the open-source Baileys engine. WhatsApp terms of service apply. Spam is strictly prohibited."
+  },
+  "Conversations": {
+    "title": "Inbox & Human Takeover",
+    "search": "Search contacts or messages...",
+    "noConversations": "No conversations recorded yet.",
+    "controlMode": "Control Mode:",
+    "modes": {
+      "ai_active": "AI Active (Auto-responding)",
+      "human_takeover": "Human Takeover (AI stopped)",
+      "paused": "Paused"
+    },
+    "takeoverButton": "Take Over (Mute AI)",
+    "resumeAiButton": "Resume AI",
+    "typeMessagePlaceholder": "Type a live human reply...",
+    "send": "Send"
+  },
+  "AI": {
+    "title": "AI Provider Keys (BYOK)",
+    "subtitle": "Your private keys are encrypted server-side with AES-256-GCM. Zero hidden markups.",
+    "addKey": "Add API Key",
+    "provider": "Provider",
+    "label": "Key Label",
+    "apiKey": "Secret API Key",
+    "testKey": "Test Key",
+    "keyValid": "API Key is valid and active",
+    "keyInvalid": "Invalid API Key"
+  },
+  "Knowledge": {
+    "title": "Knowledge Base & Documents",
+    "subtitle": "Empower your agent with accurate business facts (FAQs, text, web pages)",
+    "addFaq": "Add FAQ",
+    "addUrl": "Add Web URL",
+    "addTxt": "Add Text",
+    "question": "Frequently Asked Question",
+    "answer": "Detailed Answer",
+    "urlLabel": "Public Web URL (HTTP/HTTPS)",
+    "ssrfProtected": "Protected against SSRF and private network probing"
+  },
+  "Subscription": {
+    "title": "Subscription & Pricing",
+    "subtitle": "Transparent pricing in FCFA (XAF)",
+    "monthly": "Monthly Billing",
+    "yearly": "Yearly Billing (-15%)",
+    "currentPlan": "Your Current Plan",
+    "upgrade": "Change Plan"
+  },
+  "Admin": {
+    "title": "INNOICA Super Admin Panel",
+    "subtitle": "Global platform oversight, workspace management, and technical audit",
+    "totalUsers": "Registered Users",
+    "totalWorkspaces": "Workspaces",
+    "systemLogs": "Execution Logs & Errors",
+    "plansConfig": "Plans & Quotas Configuration"
+  }
+}

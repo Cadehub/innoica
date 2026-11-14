@@ -1,0 +1,45 @@
+# ====================================================================
+# INNOICA WhatsApp Agents v2.0 — Caddy Reverse Proxy Configuration
+# ====================================================================
+# Replace with your actual domain name:
+# e.g., agents.innoica.com
+# ====================================================================
+
+{
+  email admin@innoica.com
+  admin off
+}
+
+# HTTP to HTTPS automatic redirection handled by Caddy
+agents.innoica.com {
+  encode gzip zstd
+
+  # Security headers
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    X-XSS-Protection "1; mode=block"
+    Referrer-Policy "strict-origin-when-cross-origin"
+  }
+
+  # WhatsApp Worker pairing and session routes
+  handle /api/sessions/* {
+    reverse_proxy whatsapp-worker:4001
+  }
+
+  # AI Runtime generation routes
+  handle /api/generate-response* {
+    reverse_proxy ai-runtime:4002
+  }
+
+  # Knowledge Ingestion routes
+  handle /api/ingest/* {
+    reverse_proxy ingestion-worker:4003
+  }
+
+  # Default: Next.js SaaS Web Application
+  handle {
+    reverse_proxy web:3000
+  }
+}

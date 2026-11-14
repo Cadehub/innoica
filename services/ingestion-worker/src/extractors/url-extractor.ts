@@ -2,7 +2,7 @@
 // INNOICA WhatsApp Agents v2.0 — SSRF-Protected Web Scraping Extractor
 // ====================================================================
 
-import { validateUrlForSsrf } from '@innoica/shared';
+import { validateUrlForSsrf } from '@innoica/shared/server';
 
 export interface WebExtractionResult {
   title: string;
