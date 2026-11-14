@@ -7,6 +7,9 @@ import { createClient as createSupabaseClient, SupabaseClient } from '@supabase/
 export function getSupabaseUrl(): string {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   if (!url) {
+    if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
+      return 'https://test-supabase-url.supabase.co';
+    }
     throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set');
   }
   return url;
@@ -15,6 +18,9 @@ export function getSupabaseUrl(): string {
 export function getSupabaseAnonKey(): string {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
   if (!key) {
+    if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
+      return 'dummy-test-anon-key';
+    }
     throw new Error('NEXT_PUBLIC_SUPABASE_ANON_KEY is not set');
   }
   return key;
