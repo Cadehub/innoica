@@ -32,6 +32,19 @@ export default async function LocaleLayout({
           content="Plateforme SaaS de création et gestion d'agents IA connectés à WhatsApp par Pairing Code (Baileys)."
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                  for (var reg of registrations) {
+                    reg.unregister();
+                  }
+                });
+              }
+            `,
+          }}
+        />
       </head>
       <body className="min-h-screen bg-slate-50 text-slate-900 antialiased selection:bg-blue-600 selection:text-white">
         <NextIntlClientProvider messages={messages}>

@@ -14,6 +14,7 @@ import {
   PauseCircle,
   PlayCircle,
   AlertTriangle,
+  ArrowLeft,
 } from 'lucide-react';
 
 export function InboxClient({ initialConversations }: { initialConversations: any[] }) {
@@ -21,6 +22,7 @@ export function InboxClient({ initialConversations }: { initialConversations: an
   const [selectedConvId, setSelectedConvId] = useState<string | null>(
     initialConversations[0]?.id || null
   );
+  const [showMobileThread, setShowMobileThread] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [replyText, setReplyText] = useState('');
@@ -156,8 +158,12 @@ export function InboxClient({ initialConversations }: { initialConversations: an
   return (
     <div className="grid grid-cols-1 md:grid-cols-12 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden min-h-[600px]">
       {/* Colonne Gauche : Liste des Conversations */}
-      <div className="md:col-span-4 border-r border-slate-200 flex flex-col justify-between bg-slate-50/40">
-        <div>
+      <div
+        className={`${
+          showMobileThread ? 'hidden md:flex' : 'flex'
+        } md:col-span-4 border-r border-slate-200 flex flex-col justify-between bg-slate-50/40`}
+      >
+        <div className="w-full">
           {/* Recherche */}
           <div className="p-3 border-b border-slate-200 bg-white">
             <div className="relative">
@@ -167,7 +173,7 @@ export function InboxClient({ initialConversations }: { initialConversations: an
                 placeholder="Rechercher un numéro..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 py-1.5 pl-8 pr-3 text-xs focus:border-blue-600 focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 py-1.5 pl-8 pr-3 text-xs focus:border-blue-600 focus:outline-none min-h-[40px]"
               />
             </div>
           </div>
@@ -187,8 +193,11 @@ export function InboxClient({ initialConversations }: { initialConversations: an
                 return (
                   <button
                     key={conv.id}
-                    onClick={() => setSelectedConvId(conv.id)}
-                    className={`w-full text-left p-3.5 transition-colors flex items-start gap-3 cursor-pointer ${
+                    onClick={() => {
+                      setSelectedConvId(conv.id);
+                      setShowMobileThread(true);
+                    }}
+                    className={`w-full text-left p-3.5 transition-colors flex items-start gap-3 cursor-pointer min-h-[54px] ${
                       isSelected ? 'bg-blue-50/80 border-l-4 border-blue-600' : 'hover:bg-slate-100'
                     }`}
                   >
@@ -238,19 +247,33 @@ export function InboxClient({ initialConversations }: { initialConversations: an
       </div>
 
       {/* Colonne Droite : Fil de Discussion & Contrôles */}
-      <div className="md:col-span-8 flex flex-col justify-between bg-white h-full">
+      <div
+        className={`${
+          !showMobileThread ? 'hidden md:flex' : 'flex'
+        } md:col-span-8 flex flex-col justify-between bg-white h-full`}
+      >
         {selectedConversation ? (
           <>
             {/* Header de la discussion avec boutons Human Takeover */}
-            <div className="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-white">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs">
+            <div className="p-3 sm:p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-white">
+              <div className="flex items-center gap-2 sm:gap-3">
+                {/* Bouton retour mobile */}
+                <button
+                  type="button"
+                  onClick={() => setShowMobileThread(false)}
+                  className="md:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100 min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
+                  title="Retour aux conversations"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+
+                <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs shrink-0">
                   {selectedConversation.contacts?.display_name
                     ? selectedConversation.contacts.display_name[0].toUpperCase()
                     : 'C'}
                 </div>
-                <div>
-                  <div className="text-xs font-bold text-slate-900">
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-slate-900 truncate">
                     {selectedConversation.contacts?.display_name ||
                       selectedConversation.contacts?.phone_number}
                   </div>
