@@ -1,0 +1,22 @@
+{
+  "name": "innoica-wa-agent-monorepo",
+  "version": "2.0.0",
+  "private": true,
+  "description": "INNOICA WhatsApp Agents SaaS — Turn Complexity Into Simplicity",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm -r run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "pnpm -r run lint",
+    "worker:wa": "pnpm --filter whatsapp-worker dev",
+    "worker:ai": "pnpm --filter ai-runtime dev",
+    "worker:ingestion": "pnpm --filter ingestion-worker dev"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "packageManager": "pnpm@11.25.0"
+}
