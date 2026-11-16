@@ -1,0 +1,128 @@
+# ====================================================================
+# INNOICA WhatsApp Agents v2.0 — Production Server Docker Compose
+# ====================================================================
+# Dedicated ports for VPS deployment alongside existing Nginx services
+# Web: 3050 | WA: 4001 | AI: 4002 | Ingestion: 4003 | Speech: 4004
+# ====================================================================
+
+version: '3.8'
+
+services:
+  # --- Next.js 15 Web Application (SaaS Dashboard & Admin) ---
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    container_name: innoica-web
+    restart: unless-stopped
+    ports:
+      - "3050:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}
+      - WHATSAPP_WORKER_URL=http://whatsapp-worker:4001
+      - AI_RUNTIME_URL=http://ai-runtime:4002
+      - INGESTION_WORKER_URL=http://ingestion-worker:4003
+      - SPEECH_WORKER_URL=http://speech-worker:4004
+      - WORKER_INTERNAL_SECRET=${WORKER_INTERNAL_SECRET}
+    networks:
+      - innoica-network
+
+  # --- WhatsApp Worker (Baileys Pairing Code Only) ---
+  whatsapp-worker:
+    build:
+      context: .
+      dockerfile: services/whatsapp-worker/Dockerfile
+    container_name: innoica-whatsapp-worker
+    restart: unless-stopped
+    ports:
+      - "4001:4001"
+    environment:
+      - NODE_ENV=production
+      - PORT=4001
+      - SESSIONS_DIR=/app/sessions
+      - SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - WORKER_INTERNAL_SECRET=${WORKER_INTERNAL_SECRET}
+      - AI_RUNTIME_URL=http://ai-runtime:4002
+      - SPEECH_WORKER_URL=http://speech-worker:4004
+    volumes:
+      - innoica_wa_sessions:/app/sessions
+    networks:
+      - innoica-network
+
+  # --- AI Runtime Service (BYOK LLM Orchestrator & Dual Memory) ---
+  ai-runtime:
+    build:
+      context: .
+      dockerfile: services/ai-runtime/Dockerfile
+    container_name: innoica-ai-runtime
+    restart: unless-stopped
+    ports:
+      - "4002:4002"
+    environment:
+      - NODE_ENV=production
+      - PORT=4002
+      - SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}
+      - WORKER_INTERNAL_SECRET=${WORKER_INTERNAL_SECRET}
+      - WHATSAPP_WORKER_URL=http://whatsapp-worker:4001
+      - SPEECH_WORKER_URL=http://speech-worker:4004
+    networks:
+      - innoica-network
+
+  # --- Local Voice Transcription Worker (faster-whisper INT8 CPU) ---
+  speech-worker:
+    build:
+      context: .
+      dockerfile: services/speech-worker/Dockerfile
+    container_name: innoica-speech-worker
+    restart: unless-stopped
+    ports:
+      - "4004:4004"
+    environment:
+      - SPEECH_WORKER_PORT=4004
+      - WORKER_INTERNAL_SECRET=${WORKER_INTERNAL_SECRET}
+      - WHISPER_MODEL_SIZE=${WHISPER_MODEL_SIZE:-base}
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8}
+      - WHISPER_CPU_THREADS=${WHISPER_CPU_THREADS:-4}
+      - WHISPER_ALLOW_DOWNLOAD=${WHISPER_ALLOW_DOWNLOAD:-true}
+    volumes:
+      - innoica_whisper_models:/app/models
+    networks:
+      - innoica-network
+
+  # --- Knowledge Ingestion Worker (Anti-SSRF Web, Text & FAQ) ---
+  ingestion-worker:
+    build:
+      context: .
+      dockerfile: services/ingestion-worker/Dockerfile
+    container_name: innoica-ingestion-worker
+    restart: unless-stopped
+    ports:
+      - "4003:4003"
+    environment:
+      - NODE_ENV=production
+      - PORT=4003
+      - SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+    networks:
+      - innoica-network
+
+networks:
+  innoica-network:
+    driver: bridge
+
+volumes:
+  innoica_wa_sessions:
+    driver: local
+  innoica_whisper_models:
+    driver: local
