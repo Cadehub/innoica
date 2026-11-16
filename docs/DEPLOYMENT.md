@@ -10,15 +10,16 @@
 
 ## 1. Déploiement Frontend sur Vercel
 
-### A. Configuration du Projet Vercel
-1. Rendez-vous sur le tableau de bord Vercel ([vercel.com](https://vercel.com)) et cliquez sur **Add New... > Project**.
+### A. Configuration du Projet Vercel (Monorepo)
+1. Rendez-vous sur le tableau de bord Vercel ([vercel.com](https://vercel.com)) et cliquez sur **Add New... > Project** (ou ouvrez les **Settings > General** de votre projet existant).
 2. Importez le dépôt GitHub : `https://github.com/Cadehub/innoica.git`.
-3. **Framework Preset** : `Next.js` (détecté automatiquement).
-4. **Root Directory** : Laissez la racine `./` (le fichier [vercel.json](file:///c:/Users/UltraBook%203.1/Desktop/innoica%20wa%20agent/vercel.json) configure automatiquement le build pnpm monorepo vers `apps/web/.next`), ou sélectionnez `apps/web`.
-5. **Build & Output Settings** (si non configuré par `vercel.json`) :
-   - Build Command : `pnpm --filter innoica-web build`
-   - Output Directory : `apps/web/.next`
-   - Install Command : `pnpm install`
+3. **Root Directory (CRITIQUE)** : 
+   - Cliquez sur **Edit** à côté de **Root Directory**.
+   - Sélectionnez ou tapez : `apps/web`
+   - Cliquez sur **Save**.
+   *(Comme il s'agit d'un monorepo pnpm, Vercel a besoin de savoir que l'application Next.js réside dans `apps/web`. Vercel détectera alors automatiquement Next.js 15 et le fichier `pnpm-lock.yaml` à la racine).*
+4. **Framework Preset** : `Next.js` (détecté automatiquement).
+5. **Build & Development Settings** : Laissez les valeurs par défaut de Vercel.
 
 ### B. Variables d'Environnement Vercel (Environment Variables)
 Dans les paramètres du projet Vercel (*Settings > Environment Variables*), ajoutez les variables suivantes :
