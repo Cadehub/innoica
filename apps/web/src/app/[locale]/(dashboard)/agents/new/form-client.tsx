@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from '@/i18n/routing';
-import { createClient } from '@/lib/supabase/client';
+import { Link, useRouter } from '@/i18n/routing';
 import { AI_PROVIDERS_CONFIG } from '@innoica/shared';
+import { AutoGrowTextarea } from '@/components/auto-grow-textarea';
 import {
   UserCheck,
   TrendingUp,
@@ -15,6 +15,8 @@ import {
   Loader2,
   Check,
   Bot,
+  Lock,
+  AlertCircle,
 } from 'lucide-react';
 
 const ICON_MAP: Record<string, any> = {
@@ -29,14 +31,18 @@ const ICON_MAP: Record<string, any> = {
 export function AgentCreationForm({
   templates,
   credentials,
-  workspaceId,
+  planSlug,
+  maxAgents,
+  currentAgentsCount,
 }: {
   templates: any[];
   credentials: any[];
-  workspaceId: string;
+  planSlug: 'free' | 'starter';
+  maxAgents: number;
+  currentAgentsCount: number;
 }) {
   const router = useRouter();
-  const supabase = createClient();
+  const limitReached = currentAgentsCount >= maxAgents;
 
   const [selectedTemplate, setSelectedTemplate] = useState(
     templates.find((t) => t.slug === 'receptionist') || templates[0]
@@ -85,7 +91,6 @@ export function AgentCreationForm({
     if (providerConfig) {
       setAiModel(providerConfig.defaultModel);
     }
-    // Filtrer les credentials associés à ce provider
     const matchingCred = credentials.find((c) => c.provider === newProvider);
     if (matchingCred) {
       setSelectedCredentialId(matchingCred.id);
@@ -94,36 +99,36 @@ export function AgentCreationForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (limitReached) return;
     setLoading(true);
     setError(null);
 
     try {
-      const { data: newAgent, error: insertError } = await supabase
-        .from('agents')
-        .insert({
-          workspace_id: workspaceId,
-          template_id: selectedTemplate?.id || null,
+      const res = await fetch('/api/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           name,
-          description,
+          description: description || undefined,
+          template_slug: selectedTemplate?.slug,
           primary_language: language,
           system_prompt: systemPrompt,
           personality_traits: ['Professionnel', 'Courtois'],
-          status: 'draft',
-          is_memory_enabled: isMemoryEnabled,
-          ai_credential_id: selectedCredentialId || null,
           ai_provider: aiProvider,
           ai_model: aiModel,
           ai_temperature: temperature,
-        })
-        .select('id')
-        .single();
+          is_memory_enabled: isMemoryEnabled,
+          ai_credential_id: selectedCredentialId || null,
+        }),
+      });
 
-      if (insertError || !newAgent) {
-        throw new Error(insertError?.message || 'Erreur création agent');
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Erreur lors de la création de l’agent');
       }
 
-      // Rediriger vers l'écran de configuration & pairing WhatsApp
-      router.push(`/agents/${newAgent.id}`);
+      router.push(`/agents/${data.agent.id}`);
+      router.refresh();
     } catch (err: any) {
       setError(err.message);
       setLoading(false);
@@ -133,9 +138,43 @@ export function AgentCreationForm({
   const currentModels = (AI_PROVIDERS_CONFIG as any)[aiProvider]?.models || [];
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
-      {/* 1. Sélection du Template */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {limitReached && (
+        <div className="rounded-2xl border border-violet-200 bg-violet-50 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <Lock className="h-5 w-5 text-violet-600 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-sm font-bold text-violet-950">
+                Quota d'agents atteint ({currentAgentsCount} / {maxAgents} sur le plan{' '}
+                {planSlug === 'starter' ? 'Starter' : 'Free'})
+              </h3>
+              <p className="text-xs text-violet-800 mt-0.5">
+                {planSlug === 'free'
+                  ? 'Le plan Free inclut 1 agent WhatsApp. Passez sur Starter (5 000 FCFA/mois) pour débloquer 2 agents.'
+                  : 'Votre plan Starter autorise jusqu’à 2 agents simultanés.'}
+              </p>
+            </div>
+          </div>
+          {planSlug === 'free' && (
+            <Link
+              href="/subscription"
+              className="shrink-0 rounded-xl bg-violet-600 px-4 py-2 text-xs font-semibold text-white hover:bg-violet-700"
+            >
+              Passer à Starter
+            </Link>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <div className="flex items-center gap-2 rounded-xl bg-red-50 p-3.5 text-xs text-red-700 border border-red-200">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* 1. Template */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
         <h2 className="text-sm font-bold text-slate-900 mb-1">
           1. Choisissez votre Modèle de Départ
         </h2>
@@ -178,8 +217,8 @@ export function AgentCreationForm({
         </div>
       </div>
 
-      {/* 2. Identité & Langue */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+      {/* 2. Identity & System Prompt */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
         <h2 className="text-sm font-bold text-slate-900 mb-1">
           2. Identité et Instructions de l'Agent
         </h2>
@@ -192,7 +231,7 @@ export function AgentCreationForm({
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-200 py-2 px-3 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+              className="mt-1 w-full rounded-xl border border-slate-200 py-2.5 px-3 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
             />
           </div>
 
@@ -200,22 +239,23 @@ export function AgentCreationForm({
             <label className="block text-xs font-semibold text-slate-700">Langue principale</label>
             <select
               value={language}
-              onChange={(e) => handleLanguageChange(e.target.value as any)}
-              className="mt-1 w-full rounded-xl border border-slate-200 py-2 px-3 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
+              onChange={(e) => handleLanguageChange(e.target.value as 'fr' | 'en')}
+              className="mt-1 w-full rounded-xl border border-slate-200 py-2.5 px-3 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
             >
-              <option value="fr">🇫🇷 Français</option>
-              <option value="en">🇬🇧 English</option>
+              <option value="fr">Français</option>
+              <option value="en">English</option>
             </select>
           </div>
         </div>
 
         <div>
           <label className="block text-xs font-semibold text-slate-700">Description</label>
-          <input
-            type="text"
+          <AutoGrowTextarea
+            minHeight={42}
+            maxHeight={120}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-slate-200 py-2 px-3 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+            className="mt-1 w-full rounded-xl border border-slate-200 py-2.5 px-3 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
           />
         </div>
 
@@ -223,9 +263,10 @@ export function AgentCreationForm({
           <label className="block text-xs font-semibold text-slate-700">
             Instructions Système (Comportement & Mission)
           </label>
-          <textarea
+          <AutoGrowTextarea
             required
-            rows={5}
+            minHeight={110}
+            maxHeight={320}
             value={systemPrompt}
             onChange={(e) => setSystemPrompt(e.target.value)}
             className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 font-mono"
@@ -233,13 +274,13 @@ export function AgentCreationForm({
         </div>
       </div>
 
-      {/* 3. Configuration Fournisseur IA & BYOK */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+      {/* 3. AI Provider */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
         <h2 className="text-sm font-bold text-slate-900 mb-1">
           3. Intelligence Artificielle & Fournisseur (BYOK)
         </h2>
         <p className="text-xs text-slate-500">
-          Chaque agent utilise votre propre clé API pour une transparence totale des coûts.
+          Chaque agent utilise votre propre clé API chiffrée AES-256-GCM.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -248,25 +289,25 @@ export function AgentCreationForm({
             <select
               value={aiProvider}
               onChange={(e) => handleProviderChange(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-200 py-2.5 px-3 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white min-h-[44px]"
+              className="mt-1 w-full rounded-xl border border-slate-200 py-2.5 px-3 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
             >
-              <option value="gemini">Google Gemini (Gratuit + Vision)</option>
-              <option value="groq">Groq Cloud (Gratuit + Ultra-Rapide)</option>
-              <option value="openrouter">OpenRouter (100% Modèles Gratuits)</option>
-              <option value="openai">OpenAI (Multimodal GPT)</option>
+              <option value="gemini">Google Gemini</option>
+              <option value="groq">Groq Cloud</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="openai">OpenAI</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700">Modèle Recommandé</label>
+            <label className="block text-xs font-semibold text-slate-700">Modèle recommandé</label>
             <select
               value={aiModel}
               onChange={(e) => setAiModel(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-200 py-2.5 px-3 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white min-h-[44px]"
+              className="mt-1 w-full rounded-xl border border-slate-200 py-2.5 px-3 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
             >
               {currentModels.map((m: any) => (
                 <option key={m.id} value={m.id}>
-                  {m.name} {m.isVision ? '👁️ [Vision]' : ''} {m.isFree ? '✨ [Gratuit]' : ''}
+                  {m.name} {m.isFree ? '[Gratuit]' : ''}
                 </option>
               ))}
             </select>
@@ -275,19 +316,19 @@ export function AgentCreationForm({
           <div>
             <label className="block text-xs font-semibold text-slate-700">Clé API BYOK</label>
             {credentials.length === 0 ? (
-              <div className="mt-1 text-[11px] text-amber-600">
+              <div className="mt-2 text-[11px] text-amber-700">
                 Aucune clé enregistrée.{' '}
-                <a href="/ai-credentials" className="underline font-bold">
+                <Link href="/ai-credentials" className="underline font-bold">
                   Ajouter une clé
-                </a>
+                </Link>
               </div>
             ) : (
               <select
                 value={selectedCredentialId}
                 onChange={(e) => setSelectedCredentialId(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-200 py-2 px-3 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
+                className="mt-1 w-full rounded-xl border border-slate-200 py-2.5 px-3 text-xs text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
               >
-                <option value="">Sélectionner une clé...</option>
+                <option value="">Auto (clé active du fournisseur)</option>
                 {credentials.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.label} ({c.provider} - {c.key_hint})
@@ -298,49 +339,42 @@ export function AgentCreationForm({
           </div>
         </div>
 
-        <div className="flex items-center gap-3 pt-2">
-          <input
-            type="checkbox"
-            id="memory"
-            checked={isMemoryEnabled}
-            onChange={(e) => setIsMemoryEnabled(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-          />
-          <label htmlFor="memory" className="text-xs text-slate-700 cursor-pointer">
-            <span className="font-semibold">Activer la mémoire durable par contact</span> (retenir les préférences et historique synthétique)
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 items-center">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700">
+              Température : {temperature}
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={temperature}
+              onChange={(e) => setTemperature(parseFloat(e.target.value))}
+              className="w-full accent-blue-600 mt-2"
+            />
+          </div>
+
+          <label className="flex items-center gap-2.5 text-xs font-medium text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isMemoryEnabled}
+              onChange={(e) => setIsMemoryEnabled(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600"
+            />
+            <span>Activer la mémoire contextuelle</span>
           </label>
         </div>
       </div>
 
-      {error && (
-        <div className="rounded-xl bg-red-50 p-3 text-xs text-red-600 border border-red-100">
-          {error}
-        </div>
-      )}
-
-      {/* Bouton de validation */}
-      <div className="flex justify-end gap-3">
-        <button
-          type="button"
-          onClick={() => router.push('/agents')}
-          className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-        >
-          Annuler
-        </button>
-
+      <div className="flex justify-end">
         <button
           type="submit"
-          disabled={loading}
-          className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 disabled:opacity-50 transition-all cursor-pointer"
+          disabled={loading || limitReached}
+          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
         >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <>
-              <span>Créer l'agent & Associer WhatsApp</span>
-              <ArrowRight className="h-4 w-4" />
-            </>
-          )}
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+          <span>Créer et configurer l'agent</span>
         </button>
       </div>
     </form>

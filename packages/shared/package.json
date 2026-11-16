@@ -9,6 +9,7 @@
     "./server": "./src/server.ts"
   },
   "dependencies": {
+    "unpdf": "^2.1.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {

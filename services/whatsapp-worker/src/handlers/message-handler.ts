@@ -5,179 +5,574 @@
 
 import { proto } from '@whiskeysockets/baileys';
 import { createWorkerSupabaseClient } from '@innoica/database';
+import { normalizePhoneNumberForBaileys, type VoiceMessageMetadata } from '@innoica/shared';
+import {
+  extractAudioDescriptor,
+  inspectAudioMagicBytes,
+  MAX_VOICE_BYTES,
+  requestSpeechTranscription,
+  unwrapProtoMessage,
+  validateAudioMetadataBeforeDownload,
+} from './audio-handler.js';
+
+export type MediaDownloader = (agentId: string, msg: proto.IWebMessageInfo) => Promise<Buffer>;
+
+export interface MessageHandlerOptions {
+  speechWorkerEndpoint?: string;
+  mediaDownloader?: MediaDownloader;
+  presenceSender?: (agentId: string, toJid: string, presence: 'composing' | 'paused' | 'recording') => Promise<void>;
+}
 
 export class WhatsAppMessageHandler {
   private supabase = createWorkerSupabaseClient();
   private aiRuntimeEndpoint: string;
+  private speechWorkerEndpoint: string;
+  private mediaDownloader?: MediaDownloader;
+  private presenceSender?: (agentId: string, toJid: string, presence: 'composing' | 'paused' | 'recording') => Promise<void>;
 
-  constructor(aiRuntimeEndpoint = process.env.AI_RUNTIME_URL || 'http://localhost:4002') {
+  constructor(
+    aiRuntimeEndpoint = process.env.AI_RUNTIME_URL || 'http://localhost:4002',
+    options?: MessageHandlerOptions
+  ) {
     this.aiRuntimeEndpoint = aiRuntimeEndpoint;
+    this.speechWorkerEndpoint =
+      options?.speechWorkerEndpoint || process.env.SPEECH_WORKER_URL || 'http://localhost:4004';
+    this.mediaDownloader = options?.mediaDownloader;
+    this.presenceSender = options?.presenceSender;
   }
 
-  public async handleIncomingMessage(agentId: string, msg: proto.IWebMessageInfo): Promise<void> {
-    const rawJid = msg.key.remoteJid;
-    if (!rawJid || !msg.message) return;
+  private extractMessageText(message: proto.IMessage | null | undefined): string {
+    const unwrapped = unwrapProtoMessage(message);
+    if (!unwrapped) return '';
 
-    // Normaliser le numéro d'expéditeur (+237...)
-    const rawSenderNumber = rawJid.split('@')[0];
-    const contactPhoneNumber = `+${rawSenderNumber}`;
+    return (
+      unwrapped.conversation ||
+      unwrapped.extendedTextMessage?.text ||
+      unwrapped.imageMessage?.caption ||
+      unwrapped.videoMessage?.caption ||
+      unwrapped.documentMessage?.caption ||
+      unwrapped.buttonsResponseMessage?.selectedDisplayText ||
+      unwrapped.listResponseMessage?.title ||
+      unwrapped.templateButtonReplyMessage?.selectedDisplayText ||
+      ''
+    );
+  }
 
-    // Extraire le texte du message
-    const textContent =
-      msg.message.conversation ||
-      msg.message.extendedTextMessage?.text ||
-      msg.message.imageMessage?.caption ||
-      '';
-
-    if (!textContent.trim()) {
-      return; // Ignore les messages sans texte dans le MVP
-    }
-
-    const waMessageId = msg.key.id;
-
-    // 1. Récupérer l'agent et son workspace
-    const { data: agent, error: agentErr } = await this.supabase
-      .from('agents')
-      .select('id, workspace_id, status, is_memory_enabled, primary_language')
-      .eq('id', agentId)
-      .single();
-
-    if (agentErr || !agent) {
-      console.error(`[Message-Handler] Agent introuvable (${agentId})`);
-      return;
-    }
-
-    // 2. Déduplication par ID WhatsApp
-    if (waMessageId) {
-      const { data: existingMsg } = await this.supabase
-        .from('messages')
-        .select('id')
-        .eq('wa_message_id', waMessageId)
-        .maybeSingle();
-
-      if (existingMsg) {
-        console.info(`[Message-Handler] Message dupliqué ignoré (ID: ${waMessageId})`);
+  private async logExecutionError(
+    agentId: string,
+    workspaceId: string | undefined,
+    eventType: string,
+    message: string,
+    details: Record<string, unknown> = {}
+  ): Promise<void> {
+    try {
+      let resolvedWorkspaceId = workspaceId;
+      if (!resolvedWorkspaceId && agentId) {
+        const { data: agent } = await this.supabase
+          .from('agents')
+          .select('workspace_id')
+          .eq('id', agentId)
+          .single();
+        resolvedWorkspaceId = agent?.workspace_id;
+      }
+      if (!resolvedWorkspaceId) {
+        console.error(`[Message-Handler] Impossible de logger l'exécution: workspaceId introuvable pour agent=${agentId}`);
         return;
       }
+      await this.supabase.rpc('worker_log_execution', {
+        p_workspace_id: resolvedWorkspaceId,
+        p_agent_id: agentId,
+        p_level: 'error',
+        p_event_type: eventType,
+        p_message: message,
+        p_details: details,
+        p_worker_secret: process.env.WORKER_INTERNAL_SECRET || null,
+      });
+    } catch (logErr) {
+      console.error('[Message-Handler] Échec du logging execution_logs:', logErr);
     }
+  }
 
-    // 3. Trouver ou créer le contact
-    let contactId: string;
-    const { data: existingContact } = await this.supabase
-      .from('contacts')
-      .select('id')
-      .eq('workspace_id', agent.workspace_id)
-      .eq('phone_number', contactPhoneNumber)
-      .maybeSingle();
-
-    if (existingContact) {
-      contactId = existingContact.id;
-    } else {
-      const { data: newContact, error: contactErr } = await this.supabase
-        .from('contacts')
-        .insert({
-          workspace_id: agent.workspace_id,
-          phone_number: contactPhoneNumber,
-          display_name: msg.pushName || null,
-        })
-        .select('id')
-        .single();
-
-      if (contactErr || !newContact) {
-        console.error('[Message-Handler] Erreur création contact:', contactErr);
-        return;
-      }
-      contactId = newContact.id;
-    }
-
-    // 4. Trouver ou créer la conversation
-    let conversationId: string;
-    let controlMode: 'ai_active' | 'human_takeover' | 'paused' = 'ai_active';
-
-    const { data: existingConv } = await this.supabase
-      .from('conversations')
-      .select('id, control_mode')
-      .eq('agent_id', agentId)
-      .eq('contact_id', contactId)
-      .maybeSingle();
-
-    if (existingConv) {
-      conversationId = existingConv.id;
-      controlMode = existingConv.control_mode as any;
-    } else {
-      const { data: newConv, error: convErr } = await this.supabase
-        .from('conversations')
-        .insert({
-          agent_id: agentId,
-          contact_id: contactId,
-          control_mode: 'ai_active',
-          last_message_at: new Date().toISOString(),
-          unread_count: 1,
-        })
-        .select('id, control_mode')
-        .single();
-
-      if (convErr || !newConv) {
-        console.error('[Message-Handler] Erreur création conversation:', convErr);
-        return;
-      }
-      conversationId = newConv.id;
-      controlMode = 'ai_active';
-    }
-
-    // 5. Enregistrer le message entrant
-    const { error: msgErr } = await this.supabase.from('messages').insert({
-      conversation_id: conversationId,
-      wa_message_id: waMessageId,
-      sender_type: 'contact',
-      content: textContent,
-      delivery_status: 'received',
-      created_at: new Date().toISOString(),
-    });
-
-    if (msgErr) {
-      console.error('[Message-Handler] Erreur insertion message entrant:', msgErr);
-      return;
-    }
-
-    // Mettre à jour la date du dernier message dans la conversation
-    await this.supabase
-      .from('conversations')
-      .update({
-        last_message_at: new Date().toISOString(),
-      })
-      .eq('id', conversationId);
-
-    // 6. Vérifier l'état opérationnel de l'agent
-    if (agent.status !== 'active') {
-      console.info(`[Message-Handler] Agent ${agentId} n'est pas actif (statut: ${agent.status}). Aucune réponse automatique.`);
-      return;
-    }
-
-    // 7. Vérifier le mode de contrôle humain (Human Takeover)
-    if (controlMode === 'human_takeover' || controlMode === 'paused') {
-      console.info(`[Message-Handler] Conversation ${conversationId} est en mode ${controlMode}. L'IA ne répond pas.`);
-      return;
-    }
-
-    // 8. Transmettre au service AI Runtime pour génération de réponse
+  private async dispatchToAiRuntime(payload: Record<string, unknown>, workspaceId?: string): Promise<void> {
+    const agentId = String(payload.agentId || '');
     try {
       const response = await fetch(`${this.aiRuntimeEndpoint}/api/generate-response`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agentId,
-          conversationId,
-          contactPhoneNumber,
-          incomingMessage: textContent,
-        }),
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(45000),
       });
 
       if (!response.ok) {
-        console.error(`[Message-Handler] AI Runtime a retourné une erreur: ${response.statusText}`);
+        const errorMsg = `AI Runtime HTTP ${response.status}: ${response.statusText}`;
+        console.error(`[Message-Handler] ${errorMsg}`);
+        await this.logExecutionError(agentId, workspaceId, 'ai_dispatch_failed', errorMsg, {
+          status: response.status,
+          statusText: response.statusText,
+          conversationId: payload.conversationId,
+        });
       }
-    } catch (err) {
-      console.error('[Message-Handler] Erreur de communication avec AI Runtime:', err);
+    } catch (err: any) {
+      const errorMsg = `Erreur de communication avec AI Runtime: ${err?.message || String(err)}`;
+      console.error(`[Message-Handler] ${errorMsg}`);
+      await this.logExecutionError(agentId, workspaceId, 'ai_dispatch_failed', errorMsg, {
+        error: err?.message || String(err),
+        conversationId: payload.conversationId,
+      });
     }
+  }
+
+  public async handleIncomingMessage(agentId: string, msg: proto.IWebMessageInfo): Promise<void> {
+    const rawJid = msg.key?.remoteJid;
+    if (!rawJid || !msg.message) return;
+
+    const altJid = (msg.key as any)?.remoteJidAlt as string | undefined;
+
+    // Normalisation de altJid s'il s'agit d'un JID ou d'un numéro brut
+    let normalizedAlt: string | undefined;
+    if (altJid) {
+      const cleanAltDigits = altJid.replace(/@.*$/, '').replace(/:\d+$/, '').replace(/\D/g, '');
+      if (cleanAltDigits) {
+        normalizedAlt = `${cleanAltDigits}@s.whatsapp.net`;
+      }
+    }
+
+    // Détermination du JID effectif et du numéro de contact (+237...)
+    const effectiveJid = (normalizedAlt && normalizedAlt.endsWith('@s.whatsapp.net'))
+      ? normalizedAlt
+      : (rawJid.endsWith('@s.whatsapp.net') ? rawJid : undefined);
+
+    const rawSenderNumber = effectiveJid
+      ? effectiveJid.replace(/@.*$/, '').replace(/:\d+$/, '').replace(/\D/g, '')
+      : rawJid.replace(/@.*$/, '').replace(/:\d+$/, '').replace(/\D/g, '');
+    const contactPhoneNumber = `+${rawSenderNumber}`;
+    const waMessageId = msg.key?.id || '';
+
+    // DESTINATION WHATSAPP CRITIQUE : Toujours répondre et envoyer la présence au JID exact
+    // d'où provient le message (rawJid). Si le contact écrit depuis un chat LID (@lid),
+    // la réponse et l'indicateur "en train d'écrire..." doivent impérativement être envoyés au @lid
+    // pour s'afficher dans son fil de discussion actif sur son téléphone !
+    const destinationJid = rawJid;
+
+    // Indiquer immédiatement en temps réel que le bot écrit ('composing') dans le chat actif
+    if (this.presenceSender && destinationJid) {
+      this.presenceSender(agentId, destinationJid, 'composing').catch(() => {});
+    }
+
+    const textContent = this.extractMessageText(msg.message);
+    if (textContent.trim()) {
+      try {
+        await this.handleIncomingTextMessage({
+          agentId,
+          rawJid: destinationJid,
+          contactPhoneNumber,
+          pushName: msg.pushName || '',
+          waMessageId,
+          textContent,
+        });
+      } finally {
+        if (this.presenceSender && destinationJid) {
+          this.presenceSender(agentId, destinationJid, 'paused').catch(() => {});
+        }
+      }
+      return;
+    }
+
+    const audioDescriptor = extractAudioDescriptor(msg.message);
+    if (!audioDescriptor) {
+      if (this.presenceSender && destinationJid) {
+        this.presenceSender(agentId, destinationJid, 'paused').catch(() => {});
+      }
+      const unwrappedKeys = Object.keys(unwrapProtoMessage(msg.message) || {});
+      console.info(
+        `[Message-Handler] Message non-texte/non-audio ignoré de ${rawJid} keys=[${unwrappedKeys.join(',')}]`
+      );
+      return;
+    }
+
+    try {
+      await this.handleIncomingAudioMessage({
+        agentId,
+        msg,
+        rawJid: destinationJid,
+        contactPhoneNumber,
+        pushName: msg.pushName || '',
+        waMessageId,
+        audioDescriptor,
+      });
+    } finally {
+      if (this.presenceSender && destinationJid) {
+        this.presenceSender(agentId, destinationJid, 'paused').catch(() => {});
+      }
+    }
+  }
+
+  private async handleIncomingTextMessage(params: {
+    agentId: string;
+    rawJid: string;
+    contactPhoneNumber: string;
+    pushName: string;
+    waMessageId: string;
+    textContent: string;
+  }): Promise<void> {
+    const { data: ingestRes, error: ingestErr } = await this.supabase.rpc('worker_ingest_inbound_message', {
+      p_agent_id: params.agentId,
+      p_contact_phone: params.contactPhoneNumber,
+      p_push_name: params.pushName,
+      p_wa_message_id: params.waMessageId,
+      p_content: params.textContent,
+      p_worker_secret: process.env.WORKER_INTERNAL_SECRET || null,
+    });
+
+    if (ingestErr || !ingestRes) {
+      console.error('[Message-Handler] Erreur ingestion message entrant:', ingestErr);
+      return;
+    }
+    if (!ingestRes.ok) {
+      console.info(`[Message-Handler] Message ignoré (${ingestRes.reason}) pour agent ${params.agentId}`);
+      return;
+    }
+
+    const { agentStatus, conversationId, controlMode, messageId, workspaceId } = ingestRes as {
+      ok: boolean;
+      agentStatus: string;
+      conversationId: string;
+      controlMode: 'ai_active' | 'human_takeover' | 'paused';
+      messageId: string;
+      workspaceId?: string;
+    };
+
+    if (agentStatus !== 'active' && agentStatus !== 'connected') {
+      console.info(`[Message-Handler] Agent ${params.agentId} inactif (statut: ${agentStatus}).`);
+      return;
+    }
+    if (controlMode === 'human_takeover' || controlMode === 'paused') {
+      console.info(`[Message-Handler] Conversation ${conversationId} en mode ${controlMode}. L'IA ne répond pas.`);
+      return;
+    }
+
+    const idempotencyKey = params.waMessageId ? `wa:${params.agentId}:${params.waMessageId}` : `msg:${messageId}`;
+    await this.dispatchToAiRuntime(
+      {
+        agentId: params.agentId,
+        conversationId,
+        contactPhoneNumber: params.contactPhoneNumber,
+        replyJid: params.rawJid,
+        incomingMessage: params.textContent,
+        incomingMessageType: 'text',
+        idempotencyKey,
+      },
+      workspaceId
+    );
+  }
+
+  private async handleIncomingAudioMessage(params: {
+    agentId: string;
+    msg: proto.IWebMessageInfo;
+    rawJid: string;
+    contactPhoneNumber: string;
+    pushName: string;
+    waMessageId: string;
+    audioDescriptor: NonNullable<ReturnType<typeof extractAudioDescriptor>>;
+  }): Promise<void> {
+    const initialMeta: VoiceMessageMetadata = {
+      durationSeconds: params.audioDescriptor.durationSeconds,
+      mimeType: params.audioDescriptor.mimeType,
+      fileSizeBytes: params.audioDescriptor.fileSizeBytes,
+      isVoiceNote: params.audioDescriptor.isVoiceNote,
+      processingStatus: 'queued',
+    };
+
+    const placeholderContent = params.audioDescriptor.durationSeconds
+      ? `[Message vocal - ${params.audioDescriptor.durationSeconds}s]`
+      : '[Message vocal]';
+
+    // 1. Ingestion + contrôle serveur strict des droits d'abonnement AVANT tout téléchargement
+    const { data: ingestRes, error: ingestErr } = await this.supabase.rpc('worker_ingest_audio_message', {
+      p_agent_id: params.agentId,
+      p_contact_phone: params.contactPhoneNumber,
+      p_push_name: params.pushName,
+      p_wa_message_id: params.waMessageId,
+      p_content: placeholderContent,
+      p_voice_metadata: initialMeta,
+      p_worker_secret: process.env.WORKER_INTERNAL_SECRET || null,
+    });
+
+    if (ingestErr || !ingestRes) {
+      console.error('[Message-Handler] Erreur ingestion message audio:', ingestErr);
+      return;
+    }
+    if (!ingestRes.ok) {
+      console.info(`[Message-Handler] Audio ignoré (${ingestRes.reason}) pour agent ${params.agentId}`);
+      return;
+    }
+
+    const {
+      workspaceId,
+      agentStatus,
+      agentLanguage,
+      hasVoiceUnderstanding,
+      conversationId,
+      controlMode,
+      preferredLanguage,
+      messageId,
+    } = ingestRes as {
+      ok: boolean;
+      workspaceId: string;
+      agentStatus: string;
+      agentLanguage?: 'fr' | 'en';
+      hasVoiceUnderstanding: boolean;
+      conversationId: string;
+      controlMode: 'ai_active' | 'human_takeover' | 'paused';
+      preferredLanguage?: 'fr' | 'en' | null;
+      messageId: string;
+    };
+
+    if (agentStatus !== 'active' && agentStatus !== 'connected') {
+      console.info(`[Message-Handler] Agent ${params.agentId} inactif (statut: ${agentStatus}). Audio non traité.`);
+      return;
+    }
+    if (controlMode === 'human_takeover' || controlMode === 'paused') {
+      console.info(`[Message-Handler] Conversation ${conversationId} en mode ${controlMode}. Audio non téléchargé.`);
+      return;
+    }
+
+    const idempotencyKey = params.waMessageId ? `wa:${params.agentId}:${params.waMessageId}` : `msg:${messageId}`;
+
+    // 2. RÈGLE COMMERCIALE ABSOLUE : Free => aucun téléchargement audio, aucun appel Whisper, réponse texte stricte
+    if (!hasVoiceUnderstanding) {
+      console.info(`[Message-Handler] Vocal bloqué sur plan Free (conv=${conversationId}). Aucun média téléchargé.`);
+      await this.dispatchToAiRuntime(
+        {
+          agentId: params.agentId,
+          conversationId,
+          contactPhoneNumber: params.contactPhoneNumber,
+          replyJid: params.rawJid,
+          incomingMessage: '',
+          incomingMessageType: 'audio',
+          idempotencyKey,
+          voiceContext: {
+            messageId,
+            waMessageId: params.waMessageId,
+            entitlementBlocked: true,
+            preferredLanguage: preferredLanguage || agentLanguage || 'fr',
+            voiceMetadata: {
+              ...initialMeta,
+              processingStatus: 'blocked_free',
+              comprehensionStatus: 'insufficient',
+              blockedReason: 'free_plan',
+            },
+          },
+        },
+        workspaceId
+      );
+      return;
+    }
+
+    // 3. Plan payant actif : validation métadonnées avant téléchargement
+    const preCheck = validateAudioMetadataBeforeDownload(params.audioDescriptor);
+    if (!preCheck.valid) {
+      const failMeta: VoiceMessageMetadata = {
+        ...initialMeta,
+        processingStatus: 'failed',
+        qualityCategory: 'unsupported',
+        comprehensionStatus: 'insufficient',
+        blockedReason: 'unsupported',
+        errorCode: preCheck.errorCode,
+      };
+      await this.persistVoiceFailure(workspaceId, params.agentId, conversationId, messageId, params.waMessageId, failMeta, preCheck.errorCode);
+      await this.dispatchToAiRuntime(
+        {
+          agentId: params.agentId,
+          conversationId,
+          contactPhoneNumber: params.contactPhoneNumber,
+          replyJid: params.rawJid,
+          incomingMessage: '',
+          incomingMessageType: 'audio',
+          idempotencyKey,
+          voiceContext: {
+            messageId,
+            waMessageId: params.waMessageId,
+            entitlementBlocked: false,
+            preferredLanguage: preferredLanguage || agentLanguage || 'fr',
+            voiceMetadata: failMeta,
+          },
+        },
+        workspaceId
+      );
+      return;
+    }
+
+    if (!this.mediaDownloader) {
+      console.error('[Message-Handler] mediaDownloader indisponible pour télécharger le vocal.');
+      return;
+    }
+
+    // 4. Téléchargement en mémoire uniquement + nettoyage garanti dans finally
+    let audioBuffer: Buffer | null = null;
+    try {
+      audioBuffer = await this.mediaDownloader(params.agentId, params.msg);
+      if (!audioBuffer || audioBuffer.length === 0 || audioBuffer.length > MAX_VOICE_BYTES || !inspectAudioMagicBytes(audioBuffer)) {
+        const invalidMeta: VoiceMessageMetadata = {
+          ...initialMeta,
+          fileSizeBytes: audioBuffer ? audioBuffer.length : 0,
+          processingStatus: 'failed',
+          qualityCategory: 'unsupported',
+          comprehensionStatus: 'insufficient',
+          blockedReason: 'unsupported',
+          errorCode: 'invalid_or_corrupted_audio',
+        };
+        await this.persistVoiceFailure(workspaceId, params.agentId, conversationId, messageId, params.waMessageId, invalidMeta, 'invalid_or_corrupted_audio');
+        await this.dispatchToAiRuntime(
+          {
+            agentId: params.agentId,
+            conversationId,
+            contactPhoneNumber: params.contactPhoneNumber,
+            replyJid: params.rawJid,
+            incomingMessage: '',
+            incomingMessageType: 'audio',
+            idempotencyKey,
+            voiceContext: {
+              messageId,
+              waMessageId: params.waMessageId,
+              entitlementBlocked: false,
+              preferredLanguage: preferredLanguage || agentLanguage || 'fr',
+              voiceMetadata: invalidMeta,
+            },
+          },
+          workspaceId
+        );
+        return;
+      }
+
+      const speechRes = await requestSpeechTranscription({
+        speechWorkerEndpoint: this.speechWorkerEndpoint,
+        audioBuffer,
+        claimedMime: params.audioDescriptor.mimeType,
+        correlationId: messageId,
+      });
+
+      const resolvedLang =
+        speechRes.detectedLanguage === 'fr' || speechRes.detectedLanguage === 'en'
+          ? speechRes.detectedLanguage
+          : preferredLanguage || agentLanguage || 'fr';
+
+      const updatedMeta: VoiceMessageMetadata = {
+        ...initialMeta,
+        durationSeconds: speechRes.durationSeconds || initialMeta.durationSeconds,
+        fileSizeBytes: audioBuffer.length,
+        detectedLanguage: speechRes.detectedLanguage,
+        transcript: speechRes.transcript || '',
+        qualityCategory: speechRes.qualityCategory,
+        processingStatus: speechRes.ok ? 'completed' : 'failed',
+        processingMs: speechRes.processingMs || null,
+        errorCode: speechRes.errorCode || null,
+      };
+
+      const persistedContent =
+        speechRes.transcript && speechRes.transcript.trim()
+          ? speechRes.transcript.trim()
+          : placeholderContent;
+
+      await this.supabase.rpc('worker_update_voice_result', {
+        p_message_id: messageId,
+        p_conversation_id: conversationId,
+        p_wa_message_id: params.waMessageId,
+        p_workspace_id: workspaceId,
+        p_agent_id: params.agentId,
+        p_content: persistedContent,
+        p_voice_metadata: updatedMeta,
+        p_preferred_language: resolvedLang,
+        p_job_status: speechRes.ok ? 'completed' : 'failed',
+        p_processing_ms: speechRes.processingMs || null,
+        p_error_code: speechRes.errorCode || null,
+        p_worker_secret: process.env.WORKER_INTERNAL_SECRET || null,
+      });
+
+      await this.dispatchToAiRuntime(
+        {
+          agentId: params.agentId,
+          conversationId,
+          contactPhoneNumber: params.contactPhoneNumber,
+          replyJid: params.rawJid,
+          incomingMessage: speechRes.transcript || '',
+          incomingMessageType: 'audio',
+          idempotencyKey,
+          voiceContext: {
+            messageId,
+            waMessageId: params.waMessageId,
+            entitlementBlocked: false,
+            preferredLanguage: resolvedLang,
+            voiceMetadata: updatedMeta,
+            speechSignals: {
+              languageProbability: speechRes.languageProbability,
+              avgLogprob: speechRes.avgLogprob ?? null,
+              noSpeechProb: speechRes.noSpeechProb ?? null,
+              speechRatio: speechRes.speechRatio ?? null,
+            },
+          },
+        },
+        workspaceId
+      );
+    } catch (err) {
+      const errCode = err instanceof Error ? err.message.slice(0, 80) : 'audio_processing_error';
+      console.error(`[Message-Handler] Échec traitement vocal (msg=${messageId}):`, errCode);
+      const errMeta: VoiceMessageMetadata = {
+        ...initialMeta,
+        processingStatus: 'failed',
+        qualityCategory: 'processing_error',
+        comprehensionStatus: 'insufficient',
+        blockedReason: 'processing_error',
+        errorCode: 'speech_processing_error',
+      };
+      await this.persistVoiceFailure(workspaceId, params.agentId, conversationId, messageId, params.waMessageId, errMeta, 'speech_processing_error');
+      await this.dispatchToAiRuntime(
+        {
+          agentId: params.agentId,
+          conversationId,
+          contactPhoneNumber: params.contactPhoneNumber,
+          replyJid: params.rawJid,
+          incomingMessage: '',
+          incomingMessageType: 'audio',
+          idempotencyKey,
+          voiceContext: {
+            messageId,
+            waMessageId: params.waMessageId,
+            entitlementBlocked: false,
+            preferredLanguage: preferredLanguage || agentLanguage || 'fr',
+            voiceMetadata: errMeta,
+          },
+        },
+        workspaceId
+      );
+    } finally {
+      if (audioBuffer) {
+        audioBuffer.fill(0);
+        audioBuffer = null;
+      }
+    }
+  }
+
+  private async persistVoiceFailure(
+    workspaceId: string,
+    agentId: string,
+    conversationId: string,
+    messageId: string,
+    waMessageId: string,
+    meta: VoiceMessageMetadata,
+    errorCode: string
+  ): Promise<void> {
+    await this.supabase.rpc('worker_update_voice_result', {
+      p_message_id: messageId,
+      p_conversation_id: conversationId,
+      p_wa_message_id: waMessageId,
+      p_workspace_id: workspaceId,
+      p_agent_id: agentId,
+      p_content: '',
+      p_voice_metadata: meta,
+      p_job_status: 'failed',
+      p_error_code: errorCode,
+      p_worker_secret: process.env.WORKER_INTERNAL_SECRET || null,
+    });
   }
 }

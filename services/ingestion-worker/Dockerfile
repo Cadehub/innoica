@@ -24,7 +24,9 @@ COPY services/ingestion-worker ./services/ingestion-worker
 ENV NODE_ENV=production
 ENV PORT=4003
 
+WORKDIR /app/services/ingestion-worker
+RUN pnpm build
+
 EXPOSE 4003
 
-WORKDIR /app/services/ingestion-worker
 CMD ["pnpm", "start"]

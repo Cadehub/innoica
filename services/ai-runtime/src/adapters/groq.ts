@@ -5,7 +5,7 @@
 import { LLMGenerateOptions } from './openrouter.js';
 
 export async function callGroq(options: LLMGenerateOptions): Promise<string> {
-  const { apiKey, model, temperature = 0.7, messages, maxTokens = 1000 } = options;
+  const { apiKey, model, temperature = 0.7, messages, maxTokens = 3072 } = options;
 
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
@@ -18,7 +18,9 @@ export async function callGroq(options: LLMGenerateOptions): Promise<string> {
       temperature,
       messages,
       max_tokens: maxTokens,
+      reasoning_format: 'hidden',
     }),
+    signal: AbortSignal.timeout(25000),
   });
 
   if (!res.ok) {
@@ -32,9 +34,16 @@ export async function callGroq(options: LLMGenerateOptions): Promise<string> {
   }
 
   const data = await res.json();
-  const reply = data.choices?.[0]?.message?.content;
-  if (!reply) {
-    throw new Error('Groq: Aucune réponse retournée par le modèle');
+  const choice = data.choices?.[0];
+  const message = choice?.message;
+  let reply = message?.content;
+
+  if (!reply || !reply.trim()) {
+    if (message?.reasoning && typeof message.reasoning === 'string' && message.reasoning.trim()) {
+      reply = message.reasoning.trim();
+    } else {
+      throw new Error('Groq: Aucune réponse retournée par le modèle');
+    }
   }
 
   return reply.trim();

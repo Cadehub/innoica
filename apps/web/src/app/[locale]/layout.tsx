@@ -26,12 +26,14 @@ export default async function LocaleLayout({
   return (
     <html lang={locale}>
       <head>
-        <title>INNOICA WhatsApp Agents — Turn Complexity Into Simplicity</title>
+        <title>Innoica Agent Studio — Turn Complexity Into Simplicity</title>
         <meta
           name="description"
-          content="Plateforme SaaS de création et gestion d'agents IA connectés à WhatsApp par Pairing Code (Baileys)."
+          content="Innoica Agent Studio : plateforme SaaS d'agents IA autonomes sur WhatsApp avec contrôle humain en temps réel."
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/images/innoica-logo.jpg" type="image/jpeg" />
+        <link rel="apple-touch-icon" href="/images/innoica-logo.jpg" />
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -46,7 +48,7 @@ export default async function LocaleLayout({
           }}
         />
       </head>
-      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased selection:bg-blue-600 selection:text-white">
+      <body className="min-h-screen bg-[#fafafb] text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white">
         <NextIntlClientProvider messages={messages}>
           {children}
         </NextIntlClientProvider>

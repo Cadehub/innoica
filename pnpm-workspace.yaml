@@ -3,6 +3,7 @@ packages:
   - 'services/*'
   - 'packages/*'
 allowBuilds:
+  '@whiskeysockets/baileys': false
   esbuild: true
   protobufjs: true
 blockExoticSubdeps: false

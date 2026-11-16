@@ -111,4 +111,35 @@ describe('innoica-ai-runtime Tests & Human Takeover Verification', () => {
     expect(body.messageId).toBe('WA-MSG-12345');
     expect(body.reply).toBe('Bienvenue chez INNOICA ! Que puis-je faire pour vous ?');
   });
+
+  it('should forward replyJid for @lid / WhatsApp JID routing', async () => {
+    const mockFn = vi.fn().mockResolvedValue({
+      success: true,
+      reply: 'Bonjour !',
+      messageId: 'WA-LID-1',
+    });
+    orchestratorMock.generateAndSendResponse = mockFn;
+
+    const app = createAIRuntimeServer(orchestratorMock);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/generate-response',
+      payload: {
+        agentId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+        conversationId: 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+        contactPhoneNumber: '+237691234567',
+        replyJid: '123456789012345@lid',
+        incomingMessage: 'Bonsoir',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockFn).toHaveBeenCalledWith({
+      agentId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+      conversationId: 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+      contactPhoneNumber: '+237691234567',
+      replyJid: '123456789012345@lid',
+      incomingMessage: 'Bonsoir',
+    });
+  });
 });

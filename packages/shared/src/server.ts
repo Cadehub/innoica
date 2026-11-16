@@ -3,5 +3,6 @@
 // ====================================================================
 
 export * from './index';
-export * from './crypto/aes';
-export * from './security/ssrf';
+export { encryptSecret, decryptSecret, maskApiKey } from './crypto/aes';
+export { validateUrlForSsrf, safeFetchPublicUrl } from './security/ssrf';
+export { extractTextFromPdfBuffer, isValidPdfSignature } from './knowledge/pdf';

@@ -1,50 +1,33 @@
-# INNOICA WhatsApp Agents — Opérations & Maintenance
+# Innoica Agent Studio — Procédures Opérationnelles
 
-**Version :** 2.0  
-**Statut :** Procédures Opérationnelles
-
----
-
-## 1. Inventaire et Sauvegarde de l'Ancien Projet (Effectué)
-
-Conformément à la directive non négociable de Phase 0 :
-- **Projet hérité inventorié :** `C:\Users\UltraBook 3.1\Desktop\innoica` (ancien Agent Studio avec architecture expérimentale QR code).
-- **Éléments sauvegardés :** Code source, configurations, spécifications initiales, migrations SQL.
-- **Archive créée et vérifiée :** `C:\Users\UltraBook 3.1\Desktop\innoica-backup-legacy-20261114.zip` (499 Ko, excluant `node_modules` et `.next`).
-- **Protection des ressources partagées :**
-  - Aucun projet tiers touché (dossiers Desktop intacts : `CB-Services`, `cb-services-commerce`, `RestoGesto`, etc.).
-  - Base Supabase `cb-services` (`gaylhhpofahseviobngs`) formellement préservée.
-  - Données utilisateurs de base préservées dans `auth.users` (`biteckdebongethancade@gmail.com`).
+**Version :** 2.1  
+**Statut :** Procédures Active & Super Admin  
 
 ---
 
-## 2. Déploiement VPS Contabo (Docker Compose)
+## 1. Supervision des Services Locaux / Conteneurs
 
-### Services Déployés :
-1. `innoica-web` : Next.js 15 App Router en mode standalone Node.js.
-2. `innoica-whatsapp-worker` : Service Baileys en conteneur persistant (redémarrage `unless-stopped`).
-3. `innoica-ai-runtime` : Moteur d'exécution des prompts et BYOK.
-4. `innoica-ingestion-worker` : Service d'ingestion documentaire et scraping anti-SSRF.
-5. `innoica-queue` : Instance Redis 7 Alpine dédiée avec persistance AOF.
-6. `innoica-reverse-proxy` : Caddy ou Nginx avec certificats TLS Let's Encrypt automatiques.
-
-### Commandes Opérationnelles Usuelles :
-```bash
-# Vérification des conteneurs
-docker compose -f docker-compose.prod.yml ps
-
-# Consultation des logs structurés (sans fuite de secrets)
-docker compose -f docker-compose.prod.yml logs -f innoica-whatsapp-worker
-docker compose -f docker-compose.prod.yml logs -f innoica-ai-runtime
-
-# Redémarrage gracieux d'un worker
-docker compose -f docker-compose.prod.yml restart innoica-whatsapp-worker
-```
+| Service | Port par défaut | Endpoint Santé | Rôle |
+|---|---:|---|---|
+| `innoica-web` | `3000` | `/` | Interface SaaS Next.js + Routes API |
+| `innoica-whatsapp-worker` | `4001` | `/health` | Sessions Baileys, Pairing Code, réception/envoi WhatsApp |
+| `innoica-ai-runtime` | `4002` | `/health` | Quotas SQL, BYOK LLM, Double Garde Human Takeover, Watermark |
+| `innoica-ingestion-worker` | `4003` | `/health` | Extraction PDF/TXT/URL anti-SSRF et chunking |
 
 ---
 
-## 3. Sauvegardes & Restauration
+## 2. Gestion Quotidienne Super Admin (`/admin`)
 
-- **Base de données Supabase :** Backups automatisés quotidiens PostgreSQL.
-- **Sessions WhatsApp :** Volume persistant chiffré `/var/data/innoica/sessions/`.
-- **Restauration :** En cas d'incident sur le VPS, redéploiement via le docker-compose et rattachement des volumes existants.
+1. **Validation des paiements manuels (Orange Money / MTN MoMo / Virement) :**
+   - Vérifier la référence transactionnelle dans `/admin` -> onglet Paiements.
+   - Approuver ou rejeter la déclaration ; l'approbation active automatiquement l'abonnement `starter` (`monthly` 30 jours ou `yearly` 365 jours), supprime la signature publicitaire et enregistre une ligne dans `audit_logs`.
+2. **Administration des plans & paramètres commerciaux :**
+   - Mettre à jour `official_domain`, modèles de watermark FR/EN, limites de `plans` (`free` / `starter`) ou statut d'un workspace (`active` / `suspended`) directement via le panneau `/admin` sans redéploiement.
+
+---
+
+## 3. Sauvegarde & Préservation Héritée
+
+- Base de données Supabase (`qsyiatlvkyzknawfgpja`) : sauvegardes gérées au niveau plateforme Supabase et tables `legacy_*` préservées en lecture seule.
+- Archive du dépôt historique : `C:\Users\UltraBook 3.1\Desktop\innoica-backup-legacy-20261114.zip`.
+- Sessions WhatsApp : persistées dans `services/whatsapp-worker/sessions/` (local) ou volume monté `/app/sessions` (Docker) avec restauration automatique au redémarrage du worker.

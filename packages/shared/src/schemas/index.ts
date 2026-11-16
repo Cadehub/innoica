@@ -94,7 +94,7 @@ export const knowledgeFaqSchema = z.object({
  */
 export const knowledgeUrlSchema = z.object({
   agentId: z.string().uuid(),
-  title: z.string().trim().min(2).max(100),
+  title: z.string().trim().max(100).optional(),
   url: z
     .string()
     .trim()
@@ -102,6 +102,64 @@ export const knowledgeUrlSchema = z.object({
     .refine((val) => val.startsWith('http://') || val.startsWith('https://'), {
       message: 'Seuls les protocoles HTTP et HTTPS sont autorisés',
     }),
+});
+
+/**
+ * Schéma pour la déclaration manuelle de paiement Starter (Mensuel ou Annuel)
+ */
+export const paymentDeclarationSchema = z.object({
+  billingCycle: z.enum(['monthly', 'yearly']),
+  paymentMethod: z
+    .string()
+    .trim()
+    .min(2, 'Moyen de paiement requis (ex: Orange Money, MTN MoMo, Carte)'),
+  reference: z
+    .string()
+    .trim()
+    .min(3, 'Référence de transaction requise')
+    .max(100, 'Référence trop longue'),
+  paidAt: z.string().trim().optional(),
+  proofNote: z.string().trim().max(500).optional(),
+});
+
+/**
+ * Schéma Admin d'approbation/rejet de déclaration de paiement
+ */
+export const adminPaymentDecisionSchema = z.object({
+  declarationId: z.string().uuid(),
+  decision: z.enum(['approved', 'rejected']),
+  reviewNote: z.string().trim().max(500).optional(),
+});
+
+/**
+ * Schéma Admin de mise à jour des limites d'un plan
+ */
+export const adminPlanConfigSchema = z.object({
+  slug: z.enum(['free', 'starter']),
+  price_monthly_xaf: z.number().min(0).max(10000000),
+  price_yearly_xaf: z.number().min(0).max(100000000),
+  max_agents: z.number().int().min(1).max(100),
+  max_connections: z.number().int().min(1).max(100),
+  max_knowledge_docs: z.number().int().min(1).max(500),
+  max_daily_new_conversations: z.number().int().min(1).nullable(),
+  max_daily_bot_replies_per_conv: z.number().int().min(1).nullable(),
+  history_retention_days: z.number().int().min(1).nullable(),
+  has_watermark: z.boolean(),
+  capabilities: z
+    .object({
+      voice_message_understanding: z.boolean(),
+    })
+    .optional(),
+});
+
+/**
+ * Schéma de mise à jour / création de mémoire contact ou conversation
+ */
+export const memoryUpsertSchema = z.object({
+  scope: z.enum(['contact', 'conversation']),
+  targetId: z.string().uuid(),
+  key: z.string().trim().min(1).max(80),
+  value: z.string().trim().min(1).max(500),
 });
 
 /**

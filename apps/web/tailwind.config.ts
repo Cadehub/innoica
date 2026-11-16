@@ -41,10 +41,18 @@ const config: Config = {
         input: '#E2E8F0',
         ring: '#2563EB',
       },
+      boxShadow: {
+        '2xs': '0 1px 2px 0 rgba(0, 0, 0, 0.04)',
+        xs: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+      },
       borderRadius: {
         lg: '0.75rem',
         md: '0.5rem',
         sm: '0.375rem',
+        xs: '0.25rem',
+      },
+      backdropBlur: {
+        xs: '2px',
       },
     },
   },

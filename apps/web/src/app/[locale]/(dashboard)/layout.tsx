@@ -1,5 +1,6 @@
 import { redirect } from '@/i18n/routing';
 import { createClient } from '@/lib/supabase/server';
+import { getActiveWorkspaceContext } from '@/lib/workspace';
 import { DashboardShell } from './dashboard-shell';
 
 export default async function DashboardLayout({
@@ -11,38 +12,20 @@ export default async function DashboardLayout({
 }) {
   const { locale } = await params;
   const supabase = await createClient();
+  const ctx = await getActiveWorkspaceContext(supabase);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!ctx) {
     redirect({ href: '/login', locale });
     return null;
   }
 
-  // Récupérer le profil et vérifier si Super Admin
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name, email, is_super_admin')
-    .eq('id', user.id)
-    .single();
-
-  // Récupérer le premier workspace de l'utilisateur
-  const { data: membership } = await supabase
-    .from('workspace_members')
-    .select('workspace_id, role, workspaces (id, name, slug)')
-    .eq('user_id', user.id)
-    .limit(1)
-    .maybeSingle();
-
-  const currentWorkspace = membership?.workspaces as any;
-
   return (
     <DashboardShell
-      profile={profile}
-      userEmail={user.email || ''}
-      currentWorkspace={currentWorkspace}
+      profile={ctx.profile}
+      userEmail={ctx.user.email}
+      currentWorkspace={ctx.workspace}
+      planSlug={ctx.quota?.planSlug || 'free'}
+      locale={locale === 'en' ? 'en' : 'fr'}
     >
       {children}
     </DashboardShell>

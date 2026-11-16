@@ -1,139 +1,95 @@
-# INNOICA WhatsApp Agents — Spécification d'Architecture Technique
+# Innoica Agent Studio — Architecture Technique
 
-**Version :** 2.0  
-**Statut :** Spécification de référence
+**Version :** 2.1  
+**Monorepo :** `pnpm workspaces` + Node.js 24 + TypeScript strict  
 
 ---
 
-## 1. Vue d'ensemble du système
+## 1. Vue d'Ensemble du Système
 
 ```mermaid
 flowchart TB
-    subgraph ClientLayer ["Couche Utilisateur & Dashboard"]
-        UserBrowser["Navigateur Client / Admin"]
-        NextApp["innoica-web (Next.js 15 App Router)\n- Dashboard Client\n- Panel Super Admin\n- FR / EN (next-intl)"]
+    subgraph ClientLayer ["Navigateur Client / Admin"]
+        Browser["Application SaaS Next.js 15 (FR/EN)"]
     end
 
-    subgraph DataLayer ["Couche de Données & Vérité (Supabase Cloud / VPS)"]
+    subgraph WebApp ["apps/web (Next.js App Router)"]
+        Pages["Pages SSG/SSR (Landing, Dashboard, Inbox WhatsApp Web)"]
+        ApiRoutes["Routes API (/api/agents, /api/whatsapp, /api/knowledge, /api/subscription, /api/admin)"]
+    end
+
+    subgraph DataLayer ["Supabase (PostgreSQL 17 + Auth + Realtime)"]
         SupaAuth["Supabase Auth"]
-        SupaDB[("PostgreSQL 17\n+ RLS + pgvector")]
-        SupaStorage["Supabase Storage\n(Documents PDF / TXT)"]
-        SupaRealtime["Supabase Realtime\n(Statuts & Messages)"]
+        SupaDB[("PostgreSQL + RLS + RPC Quotas")]
+        SupaRealtime["Supabase Realtime"]
     end
 
-    subgraph VPSLayer ["Services VPS Contabo (Docker Compose)"]
-        ReverseProxy["innoica-reverse-proxy (Caddy / Nginx SSL)"]
-        Queue["innoica-queue (Redis 7 + BullMQ)"]
-        
-        WAWorker["innoica-whatsapp-worker\n(Node.js + Baileys)\n- Pairing Code Only\n- Session Isolation\n- Socket Management"]
-        
-        AIRuntime["innoica-ai-runtime\n(Node.js)\n- BYOK Orchestration\n- Double-Check Human Mode\n- Dual Memory (Chat + Contact)"]
-        
-        IngestionWorker["innoica-ingestion-worker\n- Extraction PDF/TXT/FAQ\n- Safe Web Fetch (Anti-SSRF)\n- Chunking & Indexing"]
+    subgraph Workers ["Microservices Node.js & Python"]
+        WAWorker["services/whatsapp-worker\n(Fastify + Baileys Pairing Code, Port 4001)"]
+        AIRuntime["services/ai-runtime\n(Fastify + BYOK + RAG + Watermark, Port 4002)"]
+        IngestionWorker["services/ingestion-worker\n(Fastify + PDF/TXT/URL Anti-SSRF, Port 4003)"]
+        SpeechWorker["services/speech-worker\n(FastAPI + faster-whisper INT8 CPU + PyAV, Port 4004)"]
     end
 
-    subgraph ExternalServices ["Services Externes"]
-        WhatsAppNetwork["Réseau WhatsApp (Meta)"]
-        AIProviders["Fournisseurs IA (BYOK)\n- OpenRouter\n- Groq\n- Google Gemini\n- OpenAI"]
+    subgraph External ["Services Externes"]
+        WhatsAppNet["Réseau WhatsApp (Meta)"]
+        AIProviders["Fournisseurs IA BYOK\n(Gemini, Groq, OpenRouter, OpenAI)"]
     end
 
-    UserBrowser <--> ReverseProxy
-    ReverseProxy <--> NextApp
-    NextApp <--> SupaAuth
-    NextApp <--> SupaDB
-    NextApp <--> SupaRealtime
-
-    NextApp -- "Ordre de Pairing / Envoi Manuel" --> Queue
-    Queue <--> WAWorker
-    Queue <--> AIRuntime
-    Queue <--> IngestionWorker
-
-    WAWorker <--> WhatsAppNetwork
-    WAWorker -- "Événements Messages" --> Queue
-    AIRuntime <--> AIProviders
+    Browser <--> Pages
+    Browser <--> ApiRoutes
+    Browser <--> SupaRealtime
+    Pages <--> SupaAuth
+    ApiRoutes <--> SupaDB
+    ApiRoutes <--> WAWorker
+    ApiRoutes <--> AIRuntime
+    WAWorker <--> WhatsAppNet
+    WAWorker <--> SupaDB
+    WAWorker -- "Audio (si plan payant actif)" --> SpeechWorker
+    WAWorker -- "HTTP + WORKER_INTERNAL_SECRET" --> AIRuntime
     AIRuntime <--> SupaDB
-    IngestionWorker <--> SupaStorage
+    AIRuntime <--> AIProviders
     IngestionWorker <--> SupaDB
 ```
 
 ---
 
-## 2. Découpage des Composants et Responsabilités
+## 2. Découpage des Packages & Services
 
-### 2.1 `apps/web` (Application Web & API routes Next.js)
-- **Rôle :** Interface utilisateur SaaS, gestion des workspaces, configuration des agents, monitoring, boîte de réception humaine, administration.
-- **Règles :**
-  - Aucune clé API stockée en clair côté client.
-  - Saisie du numéro WhatsApp avec validation internationale E.164.
-  - Réception en temps réel des Pairing Codes générés par le Worker.
-  - Contrôle d'accès strict via RLS Supabase et vérifications serveurs.
+### 2.1 `packages/shared`
+- **Entrée client (`@innoica/shared`) :** Types TypeScript (`WorkspaceQuotaSnapshot`, `PlanSlug`, etc.), `PLAN_CATALOG` (source de vérité Free/Starter), `APP_CONFIG`, `AI_PROVIDERS_CONFIG`, `applyPlanWatermark`, `sanitizeKnowledgeContent`, schémas Zod (`paymentDeclarationSchema`, `adminPaymentDecisionSchema`, etc.), utilitaires E.164 (`parseE164Phone`, `formatE164Phone`).
+- **Entrée serveur (`@innoica/shared/server`) :**
+  - `security/encryption.ts` : Chiffrement/déchiffrement AES-256-GCM des clés BYOK.
+  - `security/ssrf.ts` : `safeFetchPublicUrl` avec validation DNS pré-vol et inspection à chaque redirection HTTP.
+  - `knowledge/pdf.ts` : Validation signature `%PDF-` et limite 10 Mo + extraction texte PDF (`pdf-parse`).
 
-### 2.2 `services/whatsapp-worker`
-- **Rôle :** Gestionnaire de sockets WhatsApp via la bibliothèque Baileys.
-- **Fonctionnalités :**
-  - Initialisation de session isolée par agent.
-  - Exécution de `sock.requestPairingCode(phoneNumber)` à la demande.
-  - Émission du code temporaire à 8 caractères vers Supabase/Redis pour affichage client.
-  - Écoute des messages entrants (`messages.upsert`).
-  - Déduplication via identifiant de message WhatsApp (`msg.key.id`).
-  - Envoi des messages sortants (`sock.sendMessage`).
-- **Garantie absolue :** Aucun QR Code n'est jamais demandé, calculé ou stocké.
+### 2.2 `apps/web` (Port `3000`)
+- Next.js 15.5 App Router + `next-intl` (`fr` défaut sans préfixe obligatoire, `en` sur `/en`).
+- Routes API authentifiées via cookie SSR Supabase + `getActiveWorkspaceContext(supabase)`.
+- Appels vers `services/whatsapp-worker` protégés par `WORKER_INTERNAL_SECRET`.
 
-### 2.3 `services/ai-runtime`
-- **Rôle :** Cerveau d'orchestration conversationnelle.
-- **Fonctionnalités :**
-  - Dépouillement des messages depuis la file BullMQ.
-  - Vérification de l'état de l'agent (`active` uniquement).
-  - **Vérification 1 :** Contrôle du mode de conversation (`Human Takeover` => interruption immédiate).
-  - Récupération du contexte : instructions système du modèle + mémoire de conversation récente + mémoire durable du contact.
-  - Recherche sémantique dans les fragments de connaissances associés.
-  - Appel au fournisseur d'IA configuré via le connecteur BYOK correspondant.
-  - **Vérification 2 :** Re-vérification atomique du mode conversation avant envoi vers la file d'émission pour éviter toute réponse tardive en cas de prise de contrôle humaine concurrente.
+### 2.3 `services/whatsapp-worker` (Port `4001`)
+- Gestionnaire de sockets Baileys multi-sessions (`sessions/<agentId>`).
+- `printQRInTerminal: false` strictement imposé ; génération exclusive de Pairing Code (`sock.requestPairingCode`).
+- Persistance et reconnexion automatique avec verrou de session (`isConnected` + verrou anti-reconnexion concurrente) et détection de conflits multi-connexions.
+- Déduplication des messages entrants sur `wa_message_id` puis transfert authentifié vers `services/ai-runtime`.
 
-### 2.4 `services/ingestion-worker`
-- **Rôle :** Traitement documentaire asynchrone pour la base de connaissances.
-- **Fonctionnalités :**
-  - Extraction de texte à partir de PDF et fichiers TXT.
-  - Scraping d'URL publiques avec module de validation SSRF strict (rejet immédiat de toute IP locale, privée, link-local, loopback, ou métadonnées cloud).
-  - Découpage en fragments cohérents (chunking) et stockage dans PostgreSQL.
+### 2.4 `services/ai-runtime` (Port `4002`)
+- Réception des événements messages depuis le WhatsApp Worker (`POST /api/generate-response`).
+- **Séquence d'exécution stricte :**
+  1. Vérification du mode de conversation (`control_mode === 'ai_active'`).
+  2. Réservation atomique du quota via RPC `reserve_ai_reply_quota` (fuseau `Africa/Douala`).
+  3. Récupération du contexte : prompt système + mémoire durable contact (`contact_memories`) + mémoire conversation (`conversation_memories`) + chunks RAG délimités par `<untrusted_knowledge>`.
+  4. Déchiffrement BYOK en mémoire + appel au fournisseur IA.
+  5. **Double vérification atomique Human Takeover** juste avant envoi WhatsApp ; en cas d'annulation ou d'échec, appel de `release_ai_reply_quota`.
+  6. Application déterministe de la signature INNOICA via `applyPlanWatermark` selon `hasWatermark` du plan.
+  7. Envoi via WhatsApp Worker + confirmation `confirm_ai_reply_quota` avec `wa_message_id`.
 
----
+### 2.5 `services/ingestion-worker` (Port `4003`)
+- Fastify (`bodyLimit: 15 Mo`), endpoints `/api/ingest/faq`, `/api/ingest/txt`, `/api/ingest/pdf`, `/api/ingest/url`.
+- Respect des limites du plan (`max_knowledge_docs`, `allowed_knowledge_types`) et protection anti-SSRF stricte sur URL.
 
-## 3. Flux d'un message entrant (Séquence pas-à-pas)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client as Contact WhatsApp
-    participant WA as Baileys Worker
-    participant Queue as Redis / BullMQ
-    participant AI as AI Runtime
-    participant DB as Supabase DB
-    participant LLM as Provider IA (BYOK)
-    actor Human as Opérateur Humain (Dashboard)
-
-    Client->>WA: Envoie un message texte
-    WA->>WA: Valide et filtre (anti-broadcast, anti-self)
-    WA->>Queue: Événement INCOMING_MESSAGE (idempotent)
-    Queue->>DB: Enregistre le message (status: received)
-    Queue->>AI: Traitement du message
-
-    AI->>DB: Vérifie état Agent et Mode Conversation
-    alt Mode == Human Takeover OU Paused
-        AI->>AI: Arrêt immédiat du traitement IA
-    else Mode == AI Active
-        AI->>DB: Charge instructions, mémoire contact & chunks connaissances
-        AI->>LLM: Appel API avec clé chiffrée déchiffrée en mémoire volatile
-        LLM-->>AI: Réponse générée
-        
-        AI->>DB: Double-check : Le mode est-il toujours "AI Active" ?
-        alt Si un humain a pris le relais entre-temps
-            AI->>AI: Annulation de l'envoi de la réponse
-        else Toujours AI Active
-            AI->>Queue: Événement OUTGOING_MESSAGE
-            Queue->>WA: Envoie sur WhatsApp
-            WA->>Client: Message délivré
-            WA->>DB: Enregistre message sortant (status: sent)
-        end
-    end
-```
+### 2.6 `services/speech-worker` (Port `4004`)
+- Service Python FastAPI dédié à la transcription vocale locale (`faster-whisper 1.2.1` + `ctranslate2 4.8.1` INT8 CPU + `av 15.1.0` OGG/Opus en mémoire, sans `ffmpeg.exe` externe ni API payante).
+- Endpoints `/health`, `/api/hardware-audit`, `/api/transcribe` protégés par `WORKER_INTERNAL_SECRET`.
+- Décode OGG/Opus, MP3, WAV, MP4/M4A, FLAC, WebM en PCM 16 kHz mono après inspection binaire magic-bytes, vérifie la taille/durée/activité vocale, libère immédiatement les tampons en mémoire et ne journalise jamais d'audio ni de transcriptions.

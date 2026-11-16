@@ -36,8 +36,8 @@ export async function validateProviderApiKey(
           method: 'GET',
           headers: {
             Authorization: `Bearer ${cleanKey}`,
-            'HTTP-Referer': 'https://innoica.com',
-            'X-Title': 'INNOICA WhatsApp Agents',
+            'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://agents.innoica.com',
+            'X-Title': 'Innoica Agent Studio',
           },
           signal: controller.signal,
         });
@@ -52,10 +52,10 @@ export async function validateProviderApiKey(
             details: {
               accountInfo: label,
               suggestedModels: [
-                'meta-llama/llama-3.3-70b-instruct',
-                'mistralai/mistral-large-2411',
-                'deepseek/deepseek-chat',
-                'anthropic/claude-3.5-sonnet',
+                'google/gemini-2.0-flash-exp:free',
+                'meta-llama/llama-3.2-11b-vision-instruct:free',
+                'meta-llama/llama-3.3-70b-instruct:free',
+                'qwen/qwen-2.5-vl-72b-instruct:free',
               ],
             },
           };
@@ -84,7 +84,11 @@ export async function validateProviderApiKey(
             message: `Connexion Groq ultra-rapide validée (${count} modèles accessibles)`,
             details: {
               modelCount: count,
-              suggestedModels: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
+              suggestedModels: [
+                'openai/gpt-oss-120b',
+                'qwen/qwen3.8-27b',
+                'openai/gpt-oss-20b',
+              ],
             },
           };
         } else {
@@ -112,7 +116,7 @@ export async function validateProviderApiKey(
             message: `Connexion Google Gemini validée avec succès (${count} modèles)`,
             details: {
               modelCount: count,
-              suggestedModels: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'],
+              suggestedModels: ['gemini-2.0-flash', 'gemini-1.5-flash'],
             },
           };
         } else {

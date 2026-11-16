@@ -18,6 +18,7 @@ describe('innoica-whatsapp-worker API Tests', () => {
       sendMessage: vi.fn().mockResolvedValue({
         messageId: 'WA-MSG-998877',
       }),
+      sendPresence: vi.fn().mockResolvedValue(undefined),
       destroySession: vi.fn().mockResolvedValue(undefined),
     } as unknown as WhatsAppSessionManager;
   });
@@ -102,5 +103,27 @@ describe('innoica-whatsapp-worker API Tests', () => {
     const body = JSON.parse(res.body);
     expect(body.success).toBe(true);
     expect(sessionManagerMock.destroySession).toHaveBeenCalledWith('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11');
+  });
+
+  it('POST /api/sessions/:agentId/presence should update presence status', async () => {
+    const app = createWorkerServer(sessionManagerMock);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/sessions/a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11/presence',
+      payload: {
+        toPhone: '+237691234567',
+        presence: 'composing',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.success).toBe(true);
+    expect(body.presence).toBe('composing');
+    expect(sessionManagerMock.sendPresence).toHaveBeenCalledWith(
+      'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+      '+237691234567',
+      'composing'
+    );
   });
 });

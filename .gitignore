@@ -33,3 +33,24 @@ sessions/
 Thumbs.db
 .vscode/
 .idea/
+
+# Build output & Dist
+dist/
+build/
+.turbo/
+
+# Python & Speech Worker Models (heavy weights & cache)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+services/speech-worker/models/
+
+# Testing & Coverage
+coverage/
+
+# Submodules & External references
+unslop/
+

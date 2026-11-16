@@ -1,72 +1,77 @@
-# INNOICA WhatsApp Agents — Guide de Déploiement (VPS Contabo)
+# Innoica Agent Studio — Guide de Déploiement Production (Vercel & VPS / Docker)
 
-**Version :** 2.0  
-**Statut :** Guide Opérationnel de Déploiement
-
----
-
-## 1. Prérequis sur le VPS Contabo
-
-- **Système :** Ubuntu 22.04 LTS ou 24.04 LTS (ou Debian équivalent).
-- **Docker :** Version 24+ avec le plugin `docker compose` (v2).
-- **Ressources recommandées :**
-  - Minimum 4 cœurs vCPU.
-  - Minimum 8 Go de RAM.
-  - 50 Go d'espace disque disponible.
-- **Ports ouverts :**
-  - `80/tcp` (HTTP pour le challenge ACME Let's Encrypt).
-  - `443/tcp` (HTTPS pour le dashboard et l'API).
+**Version :** 2.2  
+**Architecture :** 
+- **Frontend & App Web :** Vercel (Next.js 15, SSR, Edge Middleware, Static Generation)
+- **Base de Données & Auth :** Supabase (PostgreSQL 15+, pgvector, Row Level Security, Realtime)
+- **Workers d'Arrière-Plan (Stateful) :** VPS / Docker Compose / Railway (Baileys WhatsApp, AI Runtime, Ingestion anti-SSRF, Faster-Whisper CPU INT8)
 
 ---
 
-## 2. Variables d'Environnement de Production
+## 1. Déploiement Frontend sur Vercel
 
-Créer un fichier `.env.production` sur le VPS :
+### A. Configuration du Projet Vercel
+1. Rendez-vous sur le tableau de bord Vercel ([vercel.com](https://vercel.com)) et cliquez sur **Add New... > Project**.
+2. Importez le dépôt GitHub : `https://github.com/Cadehub/innoica.git`.
+3. **Framework Preset** : `Next.js` (détecté automatiquement).
+4. **Root Directory** : Laissez la racine `./` (le fichier [vercel.json](file:///c:/Users/UltraBook%203.1/Desktop/innoica%20wa%20agent/vercel.json) configure automatiquement le build pnpm monorepo vers `apps/web/.next`), ou sélectionnez `apps/web`.
+5. **Build & Output Settings** (si non configuré par `vercel.json`) :
+   - Build Command : `pnpm --filter innoica-web build`
+   - Output Directory : `apps/web/.next`
+   - Install Command : `pnpm install`
+
+### B. Variables d'Environnement Vercel (Environment Variables)
+Dans les paramètres du projet Vercel (*Settings > Environment Variables*), ajoutez les variables suivantes :
 
 ```env
-# Node Environment
-NODE_ENV=production
+# URL publique du SaaS
+NEXT_PUBLIC_APP_URL=https://votre-projet.vercel.app
 
-# URLs Publiques
-NEXT_PUBLIC_APP_URL=https://agents.innoica.com
-NEXT_PUBLIC_APP_NAME="INNOICA WhatsApp Agents"
-NEXT_PUBLIC_APP_TAGLINE="Turn Complexity Into Simplicity"
+# Connexion Supabase (Obligatoire)
+NEXT_PUBLIC_SUPABASE_URL=https://votre-projet.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJh...
+SUPABASE_SERVICE_ROLE_KEY=eyJh...
 
-# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=https://qsyiatlvkyzknawfgpja.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOi...
+# Sécurité & Chiffrement (Obligatoire)
+ENCRYPTION_MASTER_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+WORKER_INTERNAL_SECRET=votre-cle-secrete-interne-tres-longue-min-32-chars
 
-# Chiffrement Maître AES-256-GCM (64 caractères hexadécimaux = 32 octets)
-ENCRYPTION_MASTER_KEY=4f9c2d1b8e7a3f0c6d5e4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e
-
-# Redis & BullMQ
-REDIS_HOST=innoica-queue
-REDIS_PORT=6379
-REDIS_PASSWORD=une_cle_redis_securisee_ici
-
-# Workers Configuration
-WHATSAPP_WORKER_PORT=4001
-AI_RUNTIME_PORT=4002
-INGESTION_WORKER_PORT=4003
+# URLs des Workers distants (Exposés sur votre VPS ou hébergeur de conteneurs)
+WHATSAPP_WORKER_URL=https://wa.votre-domaine.com
+AI_RUNTIME_URL=https://ai.votre-domaine.com
+INGESTION_WORKER_URL=https://ingestion.votre-domaine.com
+SPEECH_WORKER_URL=https://speech.votre-domaine.com
 ```
 
 ---
 
-## 3. Déploiement avec Docker Compose
+## 2. Déploiement des Workers d'Arrière-Plan (VPS / Docker Compose)
 
+Les workers nécessitent des connexions persistantes (WebSocket WhatsApp Baileys, sessions locales, modèle vocal Whisper en mémoire vive). Ils doivent tourner sur une instance continue (VPS type Contabo, Hetzner, DigitalOcean ou Railway).
+
+### Prérequis VPS
+- Ubuntu 22.04 LTS ou 24.04 LTS avec Docker Engine 24+ et `docker compose` v2.
+- Reverse Proxy TLS (Caddy ou Nginx) pour exposer les endpoints HTTPS vers Vercel.
+
+### Commandes de Déploiement VPS
 ```bash
-# 1. Cloner le dépôt ou transférer les fichiers
-git clone <url-du-depot> innoica-wa-agent
-cd innoica-wa-agent
-
-# 2. Configurer les variables d'environnement
-cp .env.example .env.production
-nano .env.production
-
-# 3. Construire et démarrer les conteneurs
+git clone https://github.com/Cadehub/innoica.git
+cd innoica
+cp .env.production.example .env.production
+# Renseigner les variables d'environnement dans .env.production
 docker compose -f docker-compose.prod.yml up -d --build
-
-# 4. Vérifier l'état d'exécution
 docker compose -f docker-compose.prod.yml ps
 ```
+
+---
+
+## 3. Commandes de Démarrage Manuel (Local ou Serveur Dédié)
+
+> Pour le démarrage manuel des services en mode production :
+> - Compilation générale du monorepo : `pnpm -r run build`
+> - Lancement de l'application Web Next.js (port 3000) : `pnpm start` (ou `pnpm --filter innoica-web start`)
+> - Lancement du Worker WhatsApp Baileys (port 4001) : `pnpm start:wa`
+> - Lancement de l'Orchestrateur IA (port 4002) : `pnpm start:ai`
+> - Lancement du Worker Vocal Speech (port 4004) : `pnpm start:speech`
+> - Lancement du Worker d'Ingestion (port 4003) : `pnpm start:ingestion`
+> - Lancement de la suite de tests complète : `pnpm test` (68/68 tests validés)

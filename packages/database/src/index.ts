@@ -1,1 +1,7 @@
-export * from './client';
+export {
+  getSupabaseUrl,
+  getSupabaseAnonKey,
+  getSupabaseServiceRoleKey,
+  createBrowserSupabaseClient,
+  createWorkerSupabaseClient,
+} from './client';

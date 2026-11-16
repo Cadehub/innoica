@@ -1,48 +1,33 @@
-# INNOICA WhatsApp Agents — Plan de Test Global
+# Innoica Agent Studio — Plan de Test & Qualification
 
-**Version :** 2.0  
-**Statut :** Plan Directeur de Qualification
+**Version :** 2.1  
+**Statut :** Plan Actif de Qualification  
 
 ---
 
-## 1. Objectifs & Stratégie de Test
+## 1. Niveaux de Vérification
 
-La qualification de la plateforme repose sur une suite de tests automatisés et de tests manuels structurés :
-
-| Niveau de Test | Outils / Framework | Périmètre |
+| Niveau | Outils | Périmètre |
 |---|---|---|
-| **Unitaires** | Vitest | Fonctions pures, validation Zod, calculs de quotas, logique de formatage téléphonique, protection anti-SSRF, chiffrement/déchiffrement AES-256-GCM. |
-| **Intégration** | Vitest + Supabase client | Politiques RLS, insertion de conversations/messages, transitions d'états d'agents, adaptateurs BYOK avec mocks de réponses. |
-| **WhatsApp Worker** | Vitest + Baileys mocks & harness | Validation du numéro E.164, appel `requestPairingCode()`, gestion des événements de connexion, déduplication des messages, reconnexion. |
-| **E2E & UI** | Playwright | Parcours complet : Inscription/Connexion, création d'agent, saisie du numéro, affichage du Pairing Code, bascule Human Takeover, paramétrage de clé BYOK. |
-| **Sécurité** | Scripts de test de pénétration | Injection SQL, contournement RLS inter-workspaces, tentatives SSRF sur IP privées, fuite de clés API dans les logs. |
+| **Contrôle Statique & Compilation** | `tsc --noEmit`, `next build` | Cohérence des types sur `@innoica/shared`, `apps/web`, workers et routes API/SSG. |
+| **Tests Unitaires & Sécurité** | Vitest v2.1.9 + `unittest` Python (`py -3.14`) | Schémas Zod v2.1, tarifs Free/Starter, watermark non dupliqué, PDF `%PDF-` + 10 Mo, SSRF + redirections, chiffrement AES-256-GCM, chunking, i18n FR/EN, droits vocaux (`voice_message_understanding`), décodage OGG/Opus PyAV, détection silence & clarifications multi-tour. |
+| **Intégration Workers (Mocked Harness)** | Vitest + Fastify `inject()` | Pairing Code only (zéro QR), Double Garde Human Takeover AI Runtime, endpoints `/api/ingest/*` avec SSRF bloqué. |
+| **Intégration SQL Transactionnelle Live** | PostgreSQL (`supabase:execute_sql`) | `get_workspace_quota_snapshot`, plafond `5` nouvelles conversations / `10` réponses / conv, reprise conversation J-2 sans consommer de quota, idempotence et `release_ai_reply_quota`. |
+| **Vérification Browser E2E Réelle** | Playwright Chromium | Rendu Desktop `1440x900` & Mobile `390x844`, FR & EN, Landing Page, Inscription, Dashboard `100dvh`, WhatsApp Pairing Code, Knowledge gating, Subscription, Inbox & `AutoGrowTextarea`. |
 
 ---
 
-## 2. Matrice de Scénarios Clés
+## 2. Scénarios Critiques Couverts
 
-### 2.1 Connexion WhatsApp (Pairing Code Only)
-- **TC-WA-01 :** Validation stricte d'un numéro camerounais (`+237691234567`) et international.
-- **TC-WA-02 :** Rejet d'un numéro invalide ou trop court.
-- **TC-WA-03 :** Demande de Pairing Code -> Émission du code à 8 chiffres sans aucun QR.
-- **TC-WA-04 :** Détection de l'événement `connection.update: open` -> Passage immédiat de l'agent à l'état `connected`.
-- **TC-WA-05 :** Test de déconnexion / révocation -> Clôture du socket et purge des credentials locaux.
-
-### 2.2 Intelligence Artificielle (BYOK)
-- **TC-AI-01 :** Enregistrement d'une clé API valide -> Chiffrement AES-256-GCM et masquage dans l'UI (`sk-...9f4a`).
-- **TC-AI-02 :** Test de génération réussi avec OpenRouter / Groq / Gemini / OpenAI.
-- **TC-AI-03 :** Clé invalide -> Retour d'erreur explicite sans crash du runtime.
-- **TC-AI-04 :** Quota dépassé -> Notification claire et pas de fallback payant non consenti.
-
-### 2.3 Contrôle Humain (Human Takeover)
-- **TC-HT-01 :** Message entrant avec mode `ai_active` -> Génération et envoi de la réponse automatique.
-- **TC-HT-02 :** Reprise manuelle par un opérateur -> Bascule en `human_takeover`.
-- **TC-HT-03 :** Course critique : intervention humaine *pendant* l'appel LLM -> Annulation atomique de la réponse IA (Zero late reply).
-- **TC-HT-04 :** Réactivation explicite par l'opérateur -> Rétablissement des réponses automatiques.
-
-### 2.4 Protection SSRF (Base de Connaissances)
-- **TC-KB-01 :** URL valide HTTPS publique -> Scraping autorisé et découpage en chunks.
-- **TC-KB-02 :** URL pointant vers `http://127.0.0.1` ou `http://localhost` -> Rejet immédiat avec erreur de sécurité.
-- **TC-KB-03 :** URL pointant vers `http://169.254.169.254` (metadata) -> Rejet immédiat.
-- **TC-KB-04 :** URL pointant vers IP privée `192.168.1.1` -> Rejet immédiat.
-- **TC-KB-05 :** Redirection sournoise d'un domaine public vers une IP privée -> Interception et blocage au saut de redirection.
+1. **Offres & Tarifs :** Uniquement `free` (0 FCFA) et `starter` (5 000 FCFA/mois, 54 000 FCFA/an, `-10%`, 60 000 FCFA barré, économie 6 000 FCFA) ; aucune 3e offre ni Skills/Marketplace.
+2. **Quotas Free (`Africa/Douala`) :**
+   - 5 premières nouvelles conversations du jour acceptées ; 6e refusée côté SQL (`daily_new_conversations_quota_reached`).
+   - Reprise d'une conversation d'un jour précédent acceptée sans consommer de slot.
+   - 10 réponses autorisées par conversation et par jour ; 11e refusée (`daily_conversation_replies_quota_reached`).
+   - Rejeu idempotent (`p_idempotency_key`) sans double comptage ; libération (`release_ai_reply_quota`) sur erreur/annulation restaurant immédiatement le slot.
+3. **Watermark Free :** Ajouté côté serveur sur Free sans duplication ; absent sur Starter.
+4. **Sécurité :** Refus PDF sans signature `%PDF-` ou > 10 Mo, blocage SSRF `127.0.0.1` / `169.254.169.254` y compris après redirection HTTP 302, nettoyage octets nuls et balises XML dans les connaissances, RLS actif sur 25 tables, validation binaire magic-bytes audio.
+5. **Compréhension Vocale WhatsApp (Free vs Starter) :**
+   - Compte Free (`voice_message_understanding = false`) : zéro téléchargement média, zéro appel Whisper/LLM, réponse texte FR/EN respectant quotas et watermark Free.
+   - Plans payants actifs (`voice_message_understanding = true`) : détection FR/EN, décodage OGG/Opus en mémoire, gestion explicite `sufficient` / `partial` / `insufficient` (`no_speech`, `unsupported`, `processing_error`), fusion multi-tour `clarification_state`, confirmation avant actions sensibles (`order`/`booking`/`payment`/`cancellation`/`profile_update`), zéro API payante ni fallback payant.
+6. **Ergonomie & UX :** Absence de défilement global dans le dashboard `100dvh`, absence de débordement horizontal Desktop/Mobile, croissance automatique mesurée de `AutoGrowTextarea`.

@@ -9,6 +9,11 @@ export async function GET(request: Request) {
   if (code) {
     const supabase = await createClient();
     await supabase.auth.exchangeCodeForSession(code);
+    try {
+      await supabase.rpc('bootstrap_user_workspace', { p_full_name: null });
+    } catch {
+      // Best effort fallback bootstrap
+    }
   }
 
   return NextResponse.redirect(new URL(next, requestUrl.origin));

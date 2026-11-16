@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "pnpm --filter innoica-web dev",
     "build": "pnpm -r run build",
-    "test": "vitest run",
+    "start": "pnpm --filter innoica-web start",
+    "start:wa": "pnpm --filter innoica-whatsapp-worker start",
+    "start:ai": "pnpm --filter innoica-ai-runtime start",
+    "start:ingestion": "pnpm --filter innoica-ingestion-worker start",
+    "start:speech": "python services/speech-worker/app.py",
+    "test": "vitest run packages/ services/ apps/ tests/",
     "test:watch": "vitest",
     "lint": "pnpm -r run lint",
     "worker:wa": "pnpm --filter innoica-whatsapp-worker dev",

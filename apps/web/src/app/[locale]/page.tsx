@@ -1,13 +1,21 @@
-import { redirect } from '@/i18n/routing';
 import { createClient } from '@/lib/supabase/server';
+import { LandingClient } from '@/components/landing-client';
 
-export default async function HomePage() {
+export default async function HomePage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (user) {
-    redirect({ href: '/dashboard', locale: 'fr' });
-  } else {
-    redirect({ href: '/login', locale: 'fr' });
-  }
+  return (
+    <LandingClient
+      locale={locale === 'en' ? 'en' : 'fr'}
+      isAuthenticated={Boolean(user)}
+    />
+  );
 }

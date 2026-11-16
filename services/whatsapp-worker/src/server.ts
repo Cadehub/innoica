@@ -62,6 +62,13 @@ export function createWorkerServer(sessionManager: WhatsAppSessionManager): Fast
     return reply.send(sessionStatus);
   });
 
+  // 2b. Vérification active du WebSocket WhatsApp (IQ ping temps réel)
+  app.post<{ Params: { agentId: string } }>('/api/sessions/:agentId/ping', async (request, reply) => {
+    const { agentId } = request.params;
+    const health = await sessionManager.verifySessionHealth(agentId);
+    return reply.send(health);
+  });
+
   // 3. Envoi de message sortant
   app.post<{
     Params: { agentId: string };
@@ -85,6 +92,30 @@ export function createWorkerServer(sessionManager: WhatsAppSessionManager): Fast
       return reply.status(500).send({
         success: false,
         error: err.message || 'Échec d\'envoi du message',
+      });
+    }
+  });
+
+  // 3b. Mise à jour du statut de présence (composing / typing, paused, available)
+  app.post<{
+    Params: { agentId: string };
+    Body: { toPhone?: string; presence: 'composing' | 'paused' | 'recording' | 'available' };
+  }>('/api/sessions/:agentId/presence', async (request, reply) => {
+    const { agentId } = request.params;
+    const { toPhone, presence } = request.body || {};
+
+    if (!presence) {
+      return reply.status(400).send({ error: 'presence est requis' });
+    }
+
+    try {
+      await sessionManager.sendPresence(agentId, toPhone || '', presence);
+      return reply.send({ success: true, agentId, presence });
+    } catch (err: any) {
+      request.log.error(err, `Erreur envoi présence agent ${agentId}`);
+      return reply.status(500).send({
+        success: false,
+        error: err.message || 'Échec de la mise à jour de présence',
       });
     }
   });

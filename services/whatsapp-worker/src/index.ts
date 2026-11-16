@@ -3,6 +3,7 @@
 // ====================================================================
 
 import dotenv from 'dotenv';
+dotenv.config({ path: '../../.env.local' });
 dotenv.config();
 
 import { WhatsAppSessionManager } from './session-manager.js';
@@ -14,7 +15,14 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 async function main() {
   const sessionManager = new WhatsAppSessionManager(process.env.SESSIONS_DIR || './sessions');
-  const messageHandler = new WhatsAppMessageHandler(process.env.AI_RUNTIME_URL || 'http://localhost:4002');
+  const messageHandler = new WhatsAppMessageHandler(
+    process.env.AI_RUNTIME_URL || 'http://localhost:4002',
+    {
+      speechWorkerEndpoint: process.env.SPEECH_WORKER_URL || 'http://localhost:4004',
+      mediaDownloader: (agentId, msg) => sessionManager.downloadIncomingMediaBuffer(agentId, msg),
+      presenceSender: (agentId, toJid, presence) => sessionManager.sendPresence(agentId, toJid, presence),
+    }
+  );
 
   // Relier le gestionnaire de messages au manager de session
   sessionManager.setIncomingMessageHandler(async (agentId, msg) => {
@@ -25,8 +33,9 @@ async function main() {
 
   try {
     await server.listen({ port: PORT, host: HOST });
-    console.log(`[WA-Worker] 🚀 innoica-whatsapp-worker en écoute sur http://${HOST}:${PORT}`);
-    console.log(`[WA-Worker] 🔒 Règle active : PAIRING CODE UNIQUEMENT (Zéro QR Code)`);
+    console.log(`[WA-Worker] innoica-whatsapp-worker en écoute sur http://${HOST}:${PORT}`);
+    console.log(`[WA-Worker] Règle active : PAIRING CODE UNIQUEMENT (Zéro QR Code)`);
+    await sessionManager.restoreAllSessions();
   } catch (err) {
     console.error('[WA-Worker] Erreur démarrage serveur:', err);
     process.exit(1);

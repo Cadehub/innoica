@@ -32,9 +32,70 @@ export interface WorkspaceMember {
   created_at: string;
 }
 
+export type PlanSlug = 'free' | 'starter';
+
+export interface PlanCapabilities {
+  voice_message_understanding: boolean;
+  [key: string]: boolean | undefined;
+}
+
+export type VoiceQualityCategory =
+  | 'high'
+  | 'partial'
+  | 'low'
+  | 'no_speech'
+  | 'unsupported'
+  | 'processing_error';
+
+export type VoiceComprehensionStatus = 'sufficient' | 'partial' | 'insufficient';
+
+export type VoiceProcessingStatus =
+  | 'queued'
+  | 'blocked_free'
+  | 'transcribing'
+  | 'completed'
+  | 'failed';
+
+export type MessageType = 'text' | 'audio';
+
+export type SensitiveActionType =
+  | 'order'
+  | 'booking'
+  | 'payment'
+  | 'cancellation'
+  | 'profile_update';
+
+export interface VoiceMessageMetadata {
+  durationSeconds?: number | null;
+  mimeType?: string | null;
+  fileSizeBytes?: number | null;
+  isVoiceNote?: boolean;
+  detectedLanguage?: 'fr' | 'en' | 'unknown' | string | null;
+  transcript?: string | null;
+  qualityCategory?: VoiceQualityCategory | null;
+  comprehensionStatus?: VoiceComprehensionStatus | null;
+  processingStatus?: VoiceProcessingStatus | null;
+  processingMs?: number | null;
+  extractedFacts?: string[];
+  clarificationPrompt?: string | null;
+  blockedReason?: 'free_plan' | 'no_speech' | 'unsupported' | 'processing_error' | null;
+  errorCode?: string | null;
+}
+
+export interface ClarificationState {
+  pendingTopic?: string | null;
+  awaitingConfirmation?: boolean;
+  proposedAction?: SensitiveActionType | null;
+  validatedFacts?: string[];
+  ambiguousPoints?: string[];
+  missingDetails?: string[];
+  lastSourceType?: MessageType | null;
+  updatedAt?: string | null;
+}
+
 export interface Plan {
   id: string;
-  slug: 'starter' | 'pro' | 'enterprise';
+  slug: PlanSlug;
   name_fr: string;
   name_en: string;
   description_fr: string | null;
@@ -44,8 +105,66 @@ export interface Plan {
   max_agents: number;
   max_connections: number;
   max_knowledge_docs: number;
+  max_daily_new_conversations: number | null;
+  max_daily_bot_replies_per_conv: number | null;
+  history_retention_days: number | null;
+  has_watermark: boolean;
+  allowed_knowledge_types: KnowledgeSourceType[];
+  capabilities?: PlanCapabilities;
   features: string[];
   is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PaymentDeclaration {
+  id: string;
+  workspace_id: string;
+  submitted_by: string;
+  plan_id: string;
+  billing_cycle: 'monthly' | 'yearly';
+  amount_xaf: number;
+  payment_method: string;
+  reference: string;
+  paid_at: string;
+  proof_note: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  created_at: string;
+}
+
+export interface WorkspaceQuotaSnapshot {
+  workspaceId: string;
+  workspaceStatus?: string;
+  planSlug: PlanSlug;
+  periodDate: string; // Africa/Douala YYYY-MM-DD
+  hasWatermark: boolean;
+  hasVoiceUnderstanding: boolean;
+  capabilities: PlanCapabilities;
+  maxAgents: number;
+  maxConnections: number;
+  maxKnowledgeDocs: number;
+  maxDailyNewConversations: number | null;
+  maxDailyBotRepliesPerConv: number | null;
+  historyRetentionDays: number | null;
+  allowedKnowledgeTypes: KnowledgeSourceType[];
+  dailyNewConversationsUsed: number;
+  dailyBotRepliesUsed?: number;
+  agentsCount: number;
+  connectionsCount: number;
+  subscriptionStatus: SubscriptionStatus;
+  billingCycle: 'monthly' | 'yearly';
+  currentPeriodEnd: string | null;
+}
+
+export interface ConversationMemory {
+  id: string;
+  conversation_id: string;
+  key: string;
+  value: string;
+  confidence: number;
   created_at: string;
   updated_at: string;
 }
@@ -190,6 +309,8 @@ export interface Conversation {
   agent_id: string;
   contact_id: string;
   control_mode: ControlMode;
+  preferred_language?: 'fr' | 'en' | null;
+  clarification_state?: ClarificationState | null;
   last_message_at: string;
   unread_count: number;
   created_at: string;
@@ -215,6 +336,8 @@ export interface Message {
   conversation_id: string;
   wa_message_id: string | null;
   sender_type: SenderType;
+  message_type?: MessageType;
+  voice_metadata?: VoiceMessageMetadata | null;
   content: string;
   delivery_status: DeliveryStatus;
   created_at: string;

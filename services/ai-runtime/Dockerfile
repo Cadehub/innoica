@@ -24,7 +24,9 @@ COPY services/ai-runtime ./services/ai-runtime
 ENV NODE_ENV=production
 ENV PORT=4002
 
+WORKDIR /app/services/ai-runtime
+RUN pnpm build
+
 EXPOSE 4002
 
-WORKDIR /app/services/ai-runtime
 CMD ["pnpm", "start"]

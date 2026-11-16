@@ -29,7 +29,9 @@ ENV SESSIONS_DIR=/app/sessions
 # Ensure sessions volume directory exists
 RUN mkdir -p /app/sessions
 
+WORKDIR /app/services/whatsapp-worker
+RUN pnpm build
+
 EXPOSE 4001
 
-WORKDIR /app/services/whatsapp-worker
 CMD ["pnpm", "start"]

@@ -1,40 +1,45 @@
+import { getAfricaDoualaDateString } from '@innoica/shared';
 import { createClient } from '@/lib/supabase/server';
+import { getActiveWorkspaceContext } from '@/lib/workspace';
 import { InboxClient } from './inbox-client';
 
 export default async function ConversationsPage() {
   const supabase = await createClient();
+  const ctx = await getActiveWorkspaceContext(supabase);
+  if (!ctx) return null;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const todayDouala = getAfricaDoualaDateString();
 
-  const { data: membership } = await supabase
-    .from('workspace_members')
-    .select('workspace_id')
-    .eq('user_id', user?.id)
-    .single();
+  const [{ data: conversations }, { data: reservations }] = await Promise.all([
+    supabase
+      .from('conversations')
+      .select('*, contacts(*), agents!inner(id, name, workspace_id, status)')
+      .eq('agents.workspace_id', ctx.workspace.id)
+      .order('last_message_at', { ascending: false })
+      .limit(100),
+    supabase
+      .from('quota_reply_reservations')
+      .select('conversation_id')
+      .eq('workspace_id', ctx.workspace.id)
+      .eq('period_date', todayDouala)
+      .eq('status', 'confirmed'),
+  ]);
 
-  const workspaceId = membership?.workspace_id;
-
-  // Récupérer les conversations avec contacts et agents
-  const { data: conversations } = await supabase
-    .from('conversations')
-    .select('*, contacts(*), agents!inner(id, name, workspace_id)')
-    .eq('agents.workspace_id', workspaceId)
-    .order('last_message_at', { ascending: false });
+  const replyCountsByConv: Record<string, number> = {};
+  for (const r of reservations || []) {
+    if (r.conversation_id) {
+      replyCountsByConv[r.conversation_id] = (replyCountsByConv[r.conversation_id] || 0) + 1;
+    }
+  }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-          Boîte de Réception & Contrôle Humain
-        </h1>
-        <p className="mt-1 text-xs text-slate-500">
-          Supervisez les échanges WhatsApp en direct et reprenez la main manuellement à tout moment (Human Takeover).
-        </p>
-      </div>
-
-      <InboxClient initialConversations={conversations || []} />
-    </div>
+    <InboxClient
+      initialConversations={conversations || []}
+      initialReplyCounts={replyCountsByConv}
+      planSlug={ctx.quota?.planSlug || 'free'}
+      maxRepliesPerConv={ctx.quota?.maxDailyBotRepliesPerConv ?? null}
+      maxNewConvs={ctx.quota?.maxDailyNewConversations ?? null}
+      usedNewConvs={ctx.quota?.dailyNewConversationsUsed ?? 0}
+    />
   );
 }

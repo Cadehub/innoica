@@ -1,6 +1,6 @@
 {
   "Common": {
-    "appName": "INNOICA WhatsApp Agents",
+    "appName": "Innoica Agent Studio",
     "tagline": "Turn Complexity Into Simplicity",
     "loading": "Loading...",
     "save": "Save",
@@ -135,7 +135,7 @@
     "title": "Subscription & Pricing",
     "subtitle": "Transparent pricing in FCFA (XAF)",
     "monthly": "Monthly Billing",
-    "yearly": "Yearly Billing (-15%)",
+    "yearly": "Yearly Billing (-10%)",
     "currentPlan": "Your Current Plan",
     "upgrade": "Change Plan"
   },

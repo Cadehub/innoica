@@ -2,29 +2,20 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { encryptSecret, maskApiKey, aiCredentialCreateSchema } from '@innoica/shared/server';
 import { validateProviderApiKey } from '@/lib/provider-tester';
+import { getActiveWorkspaceContext } from '@/lib/workspace';
 
 export async function GET() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const ctx = await getActiveWorkspaceContext(supabase);
 
-  if (!user) {
-    return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
-  }
-
-  const { data: member } = await supabase
-    .from('workspace_members')
-    .select('workspace_id')
-    .eq('user_id', user.id)
-    .single();
-
-  if (!member) {
-    return NextResponse.json({ error: 'Workspace introuvable' }, { status: 404 });
+  if (!ctx) {
+    return NextResponse.json({ error: 'Non authentifié ou workspace introuvable' }, { status: 401 });
   }
 
   const { data: credentials, error } = await supabase
     .from('ai_credentials')
     .select('id, provider, label, key_hint, is_valid, last_tested_at, created_at')
-    .eq('workspace_id', member.workspace_id)
+    .eq('workspace_id', ctx.workspace.id)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -36,10 +27,10 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const ctx = await getActiveWorkspaceContext(supabase);
 
-  if (!user) {
-    return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
+  if (!ctx) {
+    return NextResponse.json({ error: 'Non authentifié ou workspace introuvable' }, { status: 401 });
   }
 
   try {
@@ -52,17 +43,6 @@ export async function POST(request: Request) {
 
     const { provider, label, apiKey } = parseRes.data;
 
-    // Récupérer le workspace de l'utilisateur
-    const { data: member } = await supabase
-      .from('workspace_members')
-      .select('workspace_id')
-      .eq('user_id', user.id)
-      .single();
-
-    if (!member) {
-      return NextResponse.json({ error: 'Workspace introuvable' }, { status: 404 });
-    }
-
     // Tester d'abord la clé auprès de l'API officielle
     const validation = await validateProviderApiKey(provider, apiKey);
 
@@ -73,7 +53,7 @@ export async function POST(request: Request) {
     const { data: credential, error: insertError } = await supabase
       .from('ai_credentials')
       .insert({
-        workspace_id: member.workspace_id,
+        workspace_id: ctx.workspace.id,
         provider,
         label,
         encrypted_api_key: encryptedApiKey,

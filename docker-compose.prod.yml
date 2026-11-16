@@ -22,6 +22,7 @@ services:
       - whatsapp-worker
       - ai-runtime
       - ingestion-worker
+      - speech-worker
     networks:
       - innoica-network
 
@@ -45,6 +46,8 @@ services:
       - WHATSAPP_WORKER_URL=http://whatsapp-worker:4001
       - AI_RUNTIME_URL=http://ai-runtime:4002
       - INGESTION_WORKER_URL=http://ingestion-worker:4003
+      - SPEECH_WORKER_URL=http://speech-worker:4004
+      - WORKER_INTERNAL_SECRET=${WORKER_INTERNAL_SECRET}
     networks:
       - innoica-network
 
@@ -61,7 +64,9 @@ services:
       - SESSIONS_DIR=/app/sessions
       - SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - WORKER_INTERNAL_SECRET=${WORKER_INTERNAL_SECRET}
       - AI_RUNTIME_URL=http://ai-runtime:4002
+      - SPEECH_WORKER_URL=http://speech-worker:4004
     volumes:
       - whatsapp_sessions:/app/sessions
     networks:
@@ -80,7 +85,28 @@ services:
       - SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}
+      - WORKER_INTERNAL_SECRET=${WORKER_INTERNAL_SECRET}
       - WHATSAPP_WORKER_URL=http://whatsapp-worker:4001
+      - SPEECH_WORKER_URL=http://speech-worker:4004
+    networks:
+      - innoica-network
+
+  # --- Local Voice Transcription Worker (faster-whisper INT8 CPU) ---
+  speech-worker:
+    build:
+      context: .
+      dockerfile: services/speech-worker/Dockerfile
+    container_name: innoica-speech-worker
+    restart: unless-stopped
+    environment:
+      - SPEECH_WORKER_PORT=4004
+      - WORKER_INTERNAL_SECRET=${WORKER_INTERNAL_SECRET}
+      - WHISPER_MODEL_SIZE=${WHISPER_MODEL_SIZE:-base}
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8}
+      - WHISPER_CPU_THREADS=${WHISPER_CPU_THREADS:-4}
+      - WHISPER_ALLOW_DOWNLOAD=${WHISPER_ALLOW_DOWNLOAD:-true}
+    volumes:
+      - whisper_models:/app/models
     networks:
       - innoica-network
 
@@ -121,4 +147,6 @@ volumes:
   caddy_config:
     driver: local
   redis_data:
+    driver: local
+  whisper_models:
     driver: local

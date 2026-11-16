@@ -178,3 +178,130 @@ export async function validateUrlForSsrf(rawUrl: string): Promise<SSRFValidation
     };
   }
 }
+
+export interface SafeFetchResult {
+  body: string;
+  contentType: string;
+  finalUrl: string;
+  resolvedIp?: string;
+}
+
+/**
+ * Effectue une requête HTTP(S) sécurisée contre le SSRF :
+ * - Validation DNS pré-vol avant la requête
+ * - Validation explicite de chaque saut de redirection (redirect: 'manual')
+ * - Limite stricte de taille et de timeout
+ */
+export async function safeFetchPublicUrl(
+  initialUrl: string,
+  options?: {
+    timeoutMs?: number;
+    maxBytes?: number;
+    maxRedirects?: number;
+    userAgent?: string;
+  }
+): Promise<SafeFetchResult> {
+  const timeoutMs = options?.timeoutMs ?? 10000;
+  const maxBytes = options?.maxBytes ?? 5 * 1024 * 1024;
+  const maxRedirects = options?.maxRedirects ?? 5;
+  const userAgent =
+    options?.userAgent ?? 'INNOICA-Knowledge-Crawler/2.0 (+https://agents.innoica.com)';
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  let currentUrl = initialUrl;
+  let lastResolvedIp: string | undefined;
+
+  try {
+    for (let hop = 0; hop <= maxRedirects; hop++) {
+      const ssrfCheck = await validateUrlForSsrf(currentUrl);
+      if (!ssrfCheck.isSafe) {
+        throw new Error(`Sécurité SSRF bloquée : ${ssrfCheck.reason}`);
+      }
+      lastResolvedIp = ssrfCheck.resolvedIp;
+
+      const res = await fetch(currentUrl, {
+        method: 'GET',
+        headers: {
+          'User-Agent': userAgent,
+          Accept: 'text/html,application/xhtml+xml,text/plain',
+        },
+        signal: controller.signal,
+        redirect: 'manual',
+      });
+
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get('location');
+        if (!location) {
+          throw new Error(`Redirection HTTP ${res.status} sans en-tête Location`);
+        }
+        currentUrl = new URL(location, currentUrl).toString();
+        continue;
+      }
+
+      if (!res.ok) {
+        throw new Error(`Erreur HTTP ${res.status}: ${res.statusText}`);
+      }
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('text/html') && !contentType.includes('text/plain')) {
+        throw new Error(`Type de contenu non supporté : ${contentType}`);
+      }
+
+      const contentLength = Number(res.headers.get('content-length') || '0');
+      if (contentLength > maxBytes) {
+        throw new Error(`Document trop volumineux (${contentLength} octets > ${maxBytes})`);
+      }
+
+      if (!res.body) {
+        return {
+          body: await res.text(),
+          contentType,
+          finalUrl: currentUrl,
+          resolvedIp: lastResolvedIp,
+        };
+      }
+
+      const reader = res.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let total = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          total += value.byteLength;
+          if (total > maxBytes) {
+            await reader.cancel();
+            throw new Error(`Taille maximale de téléchargement dépassée (${maxBytes} octets)`);
+          }
+          chunks.push(value);
+        }
+      }
+
+      const combined = new Uint8Array(total);
+      let offset = 0;
+      for (const chunk of chunks) {
+        combined.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+
+      return {
+        body: new TextDecoder('utf-8').decode(combined),
+        contentType,
+        finalUrl: currentUrl,
+        resolvedIp: lastResolvedIp,
+      };
+    }
+
+    throw new Error('Trop de redirections HTTP');
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(`Timeout dépassé (${timeoutMs}ms) lors de la récupération de l'URL`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
