@@ -21,6 +21,7 @@ import {
   Globe,
 } from 'lucide-react';
 import { BrandLogo } from '@/components/brand-logo';
+import { PWAInstaller } from '@/components/pwa-installer';
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -278,6 +279,22 @@ export function DashboardShell({
             )}
           </button>
 
+          {!sidebarCollapsed && (
+            <div className="flex items-center justify-center gap-2.5 text-[10px] text-zinc-400 py-1 border-y border-zinc-100 my-1 font-medium">
+              <Link href="/privacy" className="hover:text-zinc-700 transition-colors">
+                {locale === 'en' ? 'Privacy' : 'Confidentialité'}
+              </Link>
+              <span>•</span>
+              <Link href="/terms" className="hover:text-zinc-700 transition-colors">
+                {locale === 'en' ? 'Terms' : 'CGU'}
+              </Link>
+              <span>•</span>
+              <Link href="/legal" className="hover:text-zinc-700 transition-colors">
+                {locale === 'en' ? 'Legal' : 'Légal'}
+              </Link>
+            </div>
+          )}
+
           <div
             className={`flex items-center gap-2 ${
               sidebarCollapsed
@@ -330,6 +347,9 @@ export function DashboardShell({
           </div>
         )}
       </main>
+
+      {/* PWA Smart Installation Prompt for Authenticated Users (iOS Safari & Android/Desktop) */}
+      <PWAInstaller />
     </div>
   );
 }

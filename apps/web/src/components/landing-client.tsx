@@ -1945,18 +1945,43 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-zinc-200 bg-white py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
-          <div className="flex items-center gap-2">
-            <BrandLogo compact />
-            <span>© {new Date().getFullYear()} Innoica. Tous droits réservés.</span>
+      <footer className="border-t border-zinc-200 bg-white py-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
+            <div className="flex items-center gap-2">
+              <BrandLogo compact />
+              <span>© {new Date().getFullYear()} INNOICA Technologies. Tous droits réservés.</span>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-5 text-xs text-zinc-600 font-medium">
+              <Link href={`/${locale}/privacy`} className="hover:text-zinc-950 transition-colors">
+                {isEn ? 'Privacy Policy' : 'Politique de Confidentialité'}
+              </Link>
+              <span>•</span>
+              <Link href={`/${locale}/terms`} className="hover:text-zinc-950 transition-colors">
+                {isEn ? 'Terms of Service' : 'Conditions Générales (CGU / CGV)'}
+              </Link>
+              <span>•</span>
+              <Link href={`/${locale}/legal`} className="hover:text-zinc-950 transition-colors">
+                {isEn ? 'Legal Notice' : 'Mentions Légales'}
+              </Link>
+            </div>
+
+            <div className="flex items-center gap-3 text-[11px] font-mono text-zinc-400">
+              <span>Douala, Cameroun</span>
+              <span>•</span>
+              <span>AES-256 BYOK</span>
+              <span>•</span>
+              <span>Faster-Whisper INT8</span>
+            </div>
           </div>
-          <div className="flex items-center gap-4 text-[11px] font-mono">
-            <span>Douala, Cameroun</span>
-            <span>•</span>
-            <span>Pairing Code Baileys</span>
-            <span>•</span>
-            <span>Fuseau Africa/Douala</span>
+
+          <div className="pt-4 border-t border-zinc-100 text-center">
+            <p className="text-[11px] text-zinc-400 max-w-4xl mx-auto leading-relaxed">
+              {isEn
+                ? 'Legal Disclaimer: INNOICA is an independent third-party software platform using open-source protocols. WhatsApp and related marks are registered trademarks of Meta Platforms, Inc. INNOICA is not affiliated, sponsored, or endorsed by Meta Platforms, Inc. or WhatsApp LLC.'
+                : 'Avis Légal & Non-Affiliation : INNOICA est une plateforme logicielle tierce indépendante exploitant des protocoles open-source. WhatsApp et les marques associées sont des marques déposées de Meta Platforms, Inc. INNOICA n’est ni affilié, ni sponsorisé, ni approuvé par Meta Platforms, Inc. ou WhatsApp LLC.'}
+            </p>
           </div>
         </div>
       </footer>

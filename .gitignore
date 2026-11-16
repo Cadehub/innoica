@@ -54,3 +54,7 @@ coverage/
 # Submodules & External references
 unslop/
 
+# Local deployment helper scripts & credentials
+scripts/
+
+
