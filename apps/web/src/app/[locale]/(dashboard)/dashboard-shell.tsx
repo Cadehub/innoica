@@ -24,6 +24,7 @@ import {
 import { BrandLogo } from '@/components/brand-logo';
 import { PWAInstaller } from '@/components/pwa-installer';
 import { PlanSlug } from '@innoica/shared';
+import { isStoreModuleEnabled } from '@/lib/feature-flags';
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -63,7 +64,9 @@ export function DashboardShell({
     { href: '/agents', label: locale === 'en' ? 'Agents' : 'Mes Agents', icon: Bot },
     { href: '/conversations', label: 'Inbox WhatsApp', icon: MessageSquare },
     { href: '/whatsapp', label: locale === 'en' ? 'WhatsApp Links' : 'Connexions WA', icon: Smartphone },
-    { href: '/store', label: locale === 'en' ? 'My Store' : 'Ma boutique', icon: ShoppingBag },
+    ...(isStoreModuleEnabled
+      ? [{ href: '/store', label: locale === 'en' ? 'My Store' : 'Ma boutique', icon: ShoppingBag }]
+      : []),
     { href: '/knowledge', label: locale === 'en' ? 'Knowledge' : 'Connaissances', icon: BookOpen },
     { href: '/ai-credentials', label: locale === 'en' ? 'AI Keys (BYOK)' : 'Clés IA (BYOK)', icon: Sparkles },
     { href: '/subscription', label: locale === 'en' ? 'Plan & Quotas' : 'Abonnement', icon: CreditCard },

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { Link, usePathname, useRouter } from '@/i18n/routing';
 import { BrandLogo } from '@/components/brand-logo';
+import { isStoreModuleEnabled } from '@/lib/feature-flags';
 import {
   ArrowRight,
   Bot,
@@ -815,7 +816,11 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 max-w-6xl mx-auto items-stretch">
+          <div
+            className={`grid grid-cols-1 ${
+              isStoreModuleEnabled ? 'md:grid-cols-3 max-w-6xl' : 'md:grid-cols-2 max-w-4xl'
+            } gap-6 lg:gap-8 mx-auto items-stretch`}
+          >
             {/* Plan Free */}
             <div className="rounded-2xl border border-zinc-200 bg-white p-6 sm:p-7 flex flex-col justify-between space-y-6 shadow-xs hover-card-lift">
               <div className="space-y-4">
@@ -840,9 +845,9 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
                     <Check className="h-4 w-4 text-zinc-700 shrink-0" />
                     <span>Connexion par code de jumelage</span>
                   </li>
-                  <li className="flex items-center gap-2 text-zinc-400">
-                    <span className="text-zinc-300">✕</span>
-                    <span>Site e-commerce non inclus</span>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-zinc-700 shrink-0" />
+                    <span>Support communautaire & BYOK</span>
                   </li>
                 </ul>
               </div>
@@ -855,7 +860,18 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
             </div>
 
             {/* Plan Agent */}
-            <div className="rounded-2xl border border-zinc-300 bg-white p-6 sm:p-7 flex flex-col justify-between space-y-6 shadow-xs relative hover-card-lift">
+            <div
+              className={`rounded-2xl bg-white p-6 sm:p-7 flex flex-col justify-between space-y-6 relative hover-card-lift ${
+                !isStoreModuleEnabled
+                  ? 'border-2 border-zinc-900 shadow-md'
+                  : 'border border-zinc-300 shadow-xs'
+              }`}
+            >
+              {!isStoreModuleEnabled && (
+                <span className="absolute -top-3 right-6 px-2.5 py-0.5 rounded-full bg-zinc-900 text-white text-[10px] font-semibold tracking-wider uppercase">
+                  Recommandé
+                </span>
+              )}
               <div className="space-y-4">
                 <div>
                   <h3 className="text-base font-semibold text-zinc-950">INNOICA Agent</h3>
@@ -898,52 +914,54 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
               </Link>
             </div>
 
-            {/* Plan Commerce */}
-            <div className="rounded-2xl border-2 border-zinc-900 bg-white p-6 sm:p-7 flex flex-col justify-between space-y-6 shadow-md relative hover-card-lift">
-              <span className="absolute -top-3 right-6 px-2.5 py-0.5 rounded-full bg-zinc-900 text-white text-[10px] font-semibold tracking-wider uppercase">
-                Recommandé
-              </span>
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-base font-semibold text-zinc-950">INNOICA Commerce</h3>
-                  <p className="text-xs text-zinc-500 mt-1">Pour les commerçants souhaitant une boutique en ligne et un agent synchronisé.</p>
+            {/* Plan Commerce - Shown when store module is enabled */}
+            {isStoreModuleEnabled && (
+              <div className="rounded-2xl border-2 border-zinc-900 bg-white p-6 sm:p-7 flex flex-col justify-between space-y-6 shadow-md relative hover-card-lift">
+                <span className="absolute -top-3 right-6 px-2.5 py-0.5 rounded-full bg-zinc-900 text-white text-[10px] font-semibold tracking-wider uppercase">
+                  Recommandé
+                </span>
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-zinc-950">INNOICA Commerce</h3>
+                    <p className="text-xs text-zinc-500 mt-1">Pour les commerçants souhaitant une boutique en ligne et un agent synchronisé.</p>
+                  </div>
+                  <div className="pt-2">
+                    <span className="text-3xl font-black text-zinc-950">
+                      {billingCycle === 'yearly' ? '5 850' : '6 500'} FCFA
+                    </span>
+                    <span className="text-xs text-zinc-500 ml-1">/ mois</span>
+                  </div>
+                  <ul className="space-y-2.5 text-xs text-zinc-700 pt-2 border-t border-zinc-100">
+                    <li className="flex items-center gap-2 font-medium text-zinc-900">
+                      <Check className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <span>Toutes les fonctionnalités INNOICA Agent</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <span>Site e-commerce natif hébergé</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <span>Catalogue avec variantes (tailles, couleurs)</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <span>Panier & commandes clients</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <span>Alertes WhatsApp instantanées par commande</span>
+                    </li>
+                  </ul>
                 </div>
-                <div className="pt-2">
-                  <span className="text-3xl font-black text-zinc-950">
-                    {billingCycle === 'yearly' ? '5 850' : '6 500'} FCFA
-                  </span>
-                  <span className="text-xs text-zinc-500 ml-1">/ mois</span>
-                </div>
-                <ul className="space-y-2.5 text-xs text-zinc-700 pt-2 border-t border-zinc-100">
-                  <li className="flex items-center gap-2 font-medium text-zinc-900">
-                    <Check className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span>Toutes les fonctionnalités INNOICA Agent</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span>Site e-commerce natif hébergé</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span>Catalogue avec variantes (tailles, couleurs)</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span>Panier & commandes clients</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span>Alertes WhatsApp instantanées par commande</span>
-                  </li>
-                </ul>
+                <Link
+                  href="/register?plan=pro"
+                  className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-xs font-semibold text-white text-center transition-colors shadow-xs"
+                >
+                  Choisir INNOICA Commerce
+                </Link>
               </div>
-              <Link
-                href="/register?plan=pro"
-                className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-xs font-semibold text-white text-center transition-colors shadow-xs"
-              >
-                Choisir INNOICA Commerce
-              </Link>
-            </div>
+            )}
           </div>
         </div>
       </section>

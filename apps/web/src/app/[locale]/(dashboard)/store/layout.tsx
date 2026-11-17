@@ -1,8 +1,10 @@
 import React from 'react';
 import Link from 'next/link';
+import { redirect } from '@/i18n/routing';
 import { createClient } from '@/lib/supabase/server';
 import { getActiveWorkspaceContext } from '@/lib/workspace';
 import { hasCommerceCapability } from '@/lib/feature-gating';
+import { isStoreModuleEnabled } from '@/lib/feature-flags';
 import { CommercePlanRequiredGate } from '@/components/store/commerce-plan-required-gate';
 import { StoreTabsNav } from './store-tabs-nav';
 
@@ -16,6 +18,11 @@ export default async function StoreDashboardLayout({
   params,
 }: StoreDashboardLayoutProps) {
   const { locale } = await params;
+
+  // Feature gate: if store module is not enabled in current environment, redirect to dashboard
+  if (!isStoreModuleEnabled) {
+    redirect({ href: '/dashboard', locale });
+  }
   const supabase = await createClient();
   const ctx = await getActiveWorkspaceContext(supabase);
 

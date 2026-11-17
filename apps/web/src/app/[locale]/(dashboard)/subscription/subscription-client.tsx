@@ -18,6 +18,7 @@ import {
 import { PlanSlug, WorkspaceQuotaSnapshot } from '@innoica/shared';
 import { AutoGrowTextarea } from '@/components/auto-grow-textarea';
 import { formatPriceXaf } from '@/lib/utils';
+import { isStoreModuleEnabled } from '@/lib/feature-flags';
 
 export function SubscriptionPlansClient({
   plans,
@@ -200,8 +201,8 @@ export function SubscriptionPlansClient({
         </div>
       </div>
 
-      {/* Commercial Plans Grid (Free, Agent, Commerce) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Commercial Plans Grid (Free, Agent, and optional Commerce) */}
+      <div className={`grid grid-cols-1 ${isStoreModuleEnabled ? 'md:grid-cols-3' : 'md:grid-cols-2 max-w-4xl'} gap-4`}>
         {/* Plan FREE */}
         <div
           className={`rounded-xl border p-5 sm:p-6 flex flex-col justify-between bg-white transition-colors ${
@@ -358,100 +359,102 @@ export function SubscriptionPlansClient({
           </div>
         </div>
 
-        {/* Plan INNOICA COMMERCE (6 500 FCFA) */}
-        <div
-          className={`rounded-xl border-2 p-5 sm:p-6 flex flex-col justify-between bg-white relative overflow-hidden transition-colors ${
-            currentPlanSlug === 'commerce'
-              ? 'border-emerald-600 shadow-2xs ring-1 ring-emerald-600'
-              : 'border-zinc-900 shadow-2xs'
-          }`}
-        >
-          <div>
-            <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-emerald-700 font-mono">
-                <ShoppingBag className="h-3.5 w-3.5 text-emerald-600" />
-                INNOICA Commerce
-              </span>
-              {currentPlanSlug === 'commerce' ? (
-                <span className="rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 text-[10px] font-mono font-medium">
-                  Plan actif
+        {/* Plan INNOICA COMMERCE (6 500 FCFA) - Visible only when store module is enabled */}
+        {isStoreModuleEnabled && (
+          <div
+            className={`rounded-xl border-2 p-5 sm:p-6 flex flex-col justify-between bg-white relative overflow-hidden transition-colors ${
+              currentPlanSlug === 'commerce'
+                ? 'border-emerald-600 shadow-2xs ring-1 ring-emerald-600'
+                : 'border-zinc-900 shadow-2xs'
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-emerald-700 font-mono">
+                  <ShoppingBag className="h-3.5 w-3.5 text-emerald-600" />
+                  INNOICA Commerce
                 </span>
-              ) : (
-                <span className="rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 px-2 py-0.5 text-[10px] font-mono font-semibold">
-                  Boutique + IA
-                </span>
-              )}
-            </div>
-
-            <div className="mt-3">
-              {billingCycle === 'monthly' ? (
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-semibold font-mono tabular-nums text-zinc-900">
-                    {formatPriceXaf(commerceMonthly)}
+                {currentPlanSlug === 'commerce' ? (
+                  <span className="rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 text-[10px] font-mono font-medium">
+                    Plan actif
                   </span>
-                  <span className="text-xs text-zinc-500">/ mois</span>
-                </div>
-              ) : (
-                <div>
-                  <div className="flex items-baseline gap-1.5">
+                ) : (
+                  <span className="rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 px-2 py-0.5 text-[10px] font-mono font-semibold">
+                    Boutique + IA
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-3">
+                {billingCycle === 'monthly' ? (
+                  <div className="flex items-baseline gap-1">
                     <span className="text-3xl font-semibold font-mono tabular-nums text-zinc-900">
-                      {formatPriceXaf(commerceYearly)}
+                      {formatPriceXaf(commerceMonthly)}
                     </span>
-                    <span className="text-xs text-zinc-500">/ an</span>
+                    <span className="text-xs text-zinc-500">/ mois</span>
                   </div>
-                  <div className="mt-0.5 flex items-center gap-2 text-xs">
-                    <span className="line-through text-zinc-400 font-mono tabular-nums">
-                      {formatPriceXaf(commerceAnnualFull)}/an
-                    </span>
-                    <span className="font-semibold text-emerald-700 font-mono tabular-nums">
-                      Économisez {formatPriceXaf(commerceAnnualSavings)} (-10%)
-                    </span>
+                ) : (
+                  <div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-3xl font-semibold font-mono tabular-nums text-zinc-900">
+                        {formatPriceXaf(commerceYearly)}
+                      </span>
+                      <span className="text-xs text-zinc-500">/ an</span>
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-2 text-xs">
+                      <span className="line-through text-zinc-400 font-mono tabular-nums">
+                        {formatPriceXaf(commerceAnnualFull)}/an
+                      </span>
+                      <span className="font-semibold text-emerald-700 font-mono tabular-nums">
+                        Économisez {formatPriceXaf(commerceAnnualSavings)} (-10%)
+                      </span>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+
+              <p className="mt-1.5 text-xs text-zinc-500">
+                {commercePlan?.description_fr ||
+                  'Tout INNOICA Agent + Moteur E-Commerce Natif, Storefront, Catalogue & Commandes Baileys.'}
+              </p>
+
+              <div className="mt-5 border-t border-zinc-100 pt-4 space-y-2 text-xs text-zinc-700">
+                {(commercePlan?.features || [
+                  'Tout le plan INNOICA Agent',
+                  'Jusqu’à 3 Agents IA WhatsApp & 3 numéros connectés',
+                  'Boutique en ligne native hébergée par INNOICA',
+                  'Constructeur visuel sécurisé sans code',
+                  'Catalogue produits, variantes & gestion des stocks',
+                  'Paniers & commandes en temps réel',
+                  'Paiements manuels (Livraison, Retrait, Mobile Money)',
+                  'Synchronisation catalogue & commandes WhatsApp',
+                ]).map((feat: string) => (
+                  <div key={feat} className="flex items-center gap-2">
+                    <Check className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span>{feat}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <p className="mt-1.5 text-xs text-zinc-500">
-              {commercePlan?.description_fr ||
-                'Tout INNOICA Agent + Moteur E-Commerce Natif, Storefront, Catalogue & Commandes Baileys.'}
-            </p>
-
-            <div className="mt-5 border-t border-zinc-100 pt-4 space-y-2 text-xs text-zinc-700">
-              {(commercePlan?.features || [
-                'Tout le plan INNOICA Agent',
-                'Jusqu’à 3 Agents IA WhatsApp & 3 numéros connectés',
-                'Boutique en ligne native hébergée par INNOICA',
-                'Constructeur visuel sécurisé sans code',
-                'Catalogue produits, variantes & gestion des stocks',
-                'Paniers & commandes en temps réel',
-                'Paiements manuels (Livraison, Retrait, Mobile Money)',
-                'Synchronisation catalogue & commandes WhatsApp',
-              ]).map((feat: string) => (
-                <div key={feat} className="flex items-center gap-2">
-                  <Check className="h-4 w-4 text-emerald-600 shrink-0" />
-                  <span>{feat}</span>
-                </div>
-              ))}
+            <div className="mt-6">
+              <button
+                type="button"
+                onClick={() => handleOpenModal('commerce')}
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 px-4 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors cursor-pointer shadow-2xs"
+              >
+                <CreditCard className="h-4 w-4" />
+                <span>
+                  {currentPlanSlug === 'commerce'
+                    ? 'Renouveler INNOICA Commerce'
+                    : `Activer INNOICA Commerce (${
+                        billingCycle === 'yearly' ? '70 200 FCFA/an' : '6 500 FCFA/mois'
+                      })`}
+                </span>
+              </button>
             </div>
           </div>
-
-          <div className="mt-6">
-            <button
-              type="button"
-              onClick={() => handleOpenModal('commerce')}
-              className="w-full flex items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 px-4 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors cursor-pointer shadow-2xs"
-            >
-              <CreditCard className="h-4 w-4" />
-              <span>
-                {currentPlanSlug === 'commerce'
-                  ? 'Renouveler INNOICA Commerce'
-                  : `Activer INNOICA Commerce (${
-                      billingCycle === 'yearly' ? '70 200 FCFA/an' : '6 500 FCFA/mois'
-                    })`}
-              </span>
-            </button>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Grandfathered Starter Card if applicable */}
