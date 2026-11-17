@@ -122,6 +122,26 @@ export function StoreBuilderClient({
     Array.isArray(initialLayout?.history) ? initialLayout.history : []
   );
 
+  // Saved draft & published baseline for discard/restore
+  const [availableDraft, setAvailableDraft] = useState<any | null>(
+    initialLayout?.draft && Array.isArray(initialLayout.draft.sections) ? initialLayout.draft : null
+  );
+  const [publishedBaseline, setPublishedBaseline] = useState({
+    themeColor: initialLayout?.themeColor || initialThemeColor || '#25D366',
+    sections: initialSections,
+    announcement: {
+      enabled: initialLayout?.announcement?.enabled ?? true,
+      text:
+        initialLayout?.announcement?.text ||
+        'Livraison express à Douala & Yaoundé • Retrait gratuit en boutique',
+    },
+  });
+
+  const isDirty =
+    themeColor !== publishedBaseline.themeColor ||
+    JSON.stringify(sections) !== JSON.stringify(publishedBaseline.sections) ||
+    JSON.stringify(announcement) !== JSON.stringify(publishedBaseline.announcement);
+
   // UI Navigation State
   const [activeTab, setActiveTab] = useState<'sections' | 'branding' | 'announcement' | 'history'>('sections');
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
@@ -173,6 +193,12 @@ export function StoreBuilderClient({
       }
 
       if (action === 'publish') {
+        setPublishedBaseline({
+          themeColor,
+          sections,
+          announcement,
+        });
+        setAvailableDraft(null);
         setStatusMessage({
           type: 'success',
           text: 'Boutique publiée avec succès ! Les modifications sont visibles en ligne.',
@@ -180,7 +206,9 @@ export function StoreBuilderClient({
         if (data.builderLayout?.history) {
           setHistory(data.builderLayout.history);
         }
+        router.refresh();
       } else {
+        setAvailableDraft(data.builderLayout?.draft || { themeColor, sections, announcement, savedAt: new Date().toISOString() });
         setStatusMessage({
           type: 'success',
           text: 'Brouillon enregistré. Vous pouvez reprendre votre travail à tout moment.',
@@ -211,8 +239,67 @@ export function StoreBuilderClient({
     setTimeout(() => setStatusMessage(null), 3000);
   };
 
+  const handleDiscardChanges = () => {
+    setThemeColor(publishedBaseline.themeColor);
+    setSections(publishedBaseline.sections);
+    setAnnouncement(publishedBaseline.announcement);
+    setStatusMessage({
+      type: 'success',
+      text: 'Modifications non publiées annulées.',
+    });
+    setTimeout(() => setStatusMessage(null), 3000);
+  };
+
+  const handleLoadDraft = () => {
+    if (!availableDraft) return;
+    if (availableDraft.themeColor) setThemeColor(availableDraft.themeColor);
+    if (Array.isArray(availableDraft.sections)) setSections(availableDraft.sections);
+    if (availableDraft.announcement) setAnnouncement(availableDraft.announcement);
+    setAvailableDraft(null);
+    setStatusMessage({
+      type: 'success',
+      text: 'Brouillon chargé sur le canevas. Cliquez sur « Publier la boutique » pour le mettre en ligne.',
+    });
+    setTimeout(() => setStatusMessage(null), 4000);
+  };
+
   return (
     <div className="space-y-4 antialiased">
+      {/* Draft Restore Banner */}
+      {availableDraft && (
+        <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900">
+          <div>
+            <span className="font-bold">Brouillon non publié disponible</span>
+            {availableDraft.savedAt && (
+              <span className="text-amber-700 ml-1.5">
+                (enregistré le{' '}
+                {new Date(availableDraft.savedAt).toLocaleString('fr-FR', {
+                  dateStyle: 'short',
+                  timeStyle: 'short',
+                })}
+                )
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleLoadDraft}
+              className="px-3 py-1.5 rounded-xl bg-amber-900 text-white font-bold hover:bg-amber-800 transition-colors cursor-pointer"
+            >
+              Charger le brouillon
+            </button>
+            <button
+              type="button"
+              onClick={() => setAvailableDraft(null)}
+              className="px-2.5 py-1.5 rounded-xl border border-amber-300 text-amber-800 font-semibold hover:bg-amber-100 transition-colors cursor-pointer"
+            >
+              Ignorer
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Action Toolbar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-white border border-zinc-200/80 shadow-2xs">
         <div>
@@ -224,8 +311,19 @@ export function StoreBuilderClient({
           </p>
         </div>
 
-        {/* Action Buttons: Save Draft, Publish, View Live */}
+        {/* Action Buttons: Discard, Save Draft, Publish, View Live */}
         <div className="flex items-center gap-2 flex-wrap">
+          {isDirty && (
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={handleDiscardChanges}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-600 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span>Annuler</span>
+            </button>
+          )}
           <button
             type="button"
             disabled={isSaving}

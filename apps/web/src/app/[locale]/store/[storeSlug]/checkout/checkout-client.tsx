@@ -76,7 +76,7 @@ export function CheckoutClient({
       return 'Veuillez saisir votre nom complet (au moins 2 caractères).';
     }
 
-    const cleanPhone = customerPhone.trim();
+    const cleanPhone = customerPhone.replace(/[\s.-]/g, '').trim();
     if (!cameroonPhoneRegex.test(cleanPhone)) {
       return 'Veuillez saisir un numéro de téléphone camerounais valide (ex: +237 6XXXXXXXX ou 6XXXXXXXX).';
     }
@@ -120,7 +120,7 @@ export function CheckoutClient({
       const orderPayload = {
         storeSlug,
         customerName: customerName.trim(),
-        customerPhone: customerPhone.trim(),
+        customerPhone: customerPhone.replace(/[\s.-]/g, '').trim(),
         customerEmail: customerEmail.trim() || null,
         deliveryMethod,
         deliveryZoneId: deliveryMethod === 'delivery' ? selectedZoneId || null : null,
@@ -296,7 +296,12 @@ export function CheckoutClient({
                     name="deliveryMethod"
                     value="delivery"
                     checked={deliveryMethod === 'delivery'}
-                    onChange={() => setDeliveryMethod('delivery')}
+                    onChange={() => {
+                      setDeliveryMethod('delivery');
+                      if (paymentMethod === 'pickup') {
+                        setPaymentMethod('cash_on_delivery');
+                      }
+                    }}
                     className="mt-1 text-zinc-900 focus:ring-zinc-900"
                   />
                   <div>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { getActiveWorkspaceContext } from '@/lib/workspace';
+import { isReservedStoreSlug } from '@innoica/shared';
 import { StoreOverviewClient } from './store-overview-client';
 
 interface StoreOverviewPageProps {
@@ -22,17 +23,21 @@ export default async function StoreOverviewPage({ params }: StoreOverviewPagePro
     .maybeSingle();
 
   if (!store) {
-    // Generate clean unique initial slug based on workspace slug or name
-    const initialSlug = (ctx.workspace.slug || 'boutique')
+    // Generate clean unique initial slug based on workspace slug or name, avoiding reserved slugs
+    let initialSlug = (ctx.workspace.slug || 'boutique')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
 
-    const { data: createdStore } = await supabase
+    if (!initialSlug || initialSlug.length < 2 || isReservedStoreSlug(initialSlug)) {
+      initialSlug = `boutique-${ctx.workspace.id.slice(0, 8)}`;
+    }
+
+    const { data: createdStore, error: createErr } = await supabase
       .from('store_settings')
       .insert({
         workspace_id: ctx.workspace.id,
-        store_slug: initialSlug || `store-${ctx.workspace.id.slice(0, 8)}`,
+        store_slug: initialSlug,
         store_name: ctx.workspace.name || 'Ma Boutique',
         theme_color: '#25D366',
         is_active: true,
@@ -40,7 +45,22 @@ export default async function StoreOverviewPage({ params }: StoreOverviewPagePro
       .select()
       .single();
 
-    store = createdStore;
+    if (createErr?.code === '23505') {
+      const { data: fallbackStore } = await supabase
+        .from('store_settings')
+        .insert({
+          workspace_id: ctx.workspace.id,
+          store_slug: `${initialSlug.slice(0, 48)}-${ctx.workspace.id.slice(0, 6)}`,
+          store_name: ctx.workspace.name || 'Ma Boutique',
+          theme_color: '#25D366',
+          is_active: true,
+        })
+        .select()
+        .single();
+      store = fallbackStore;
+    } else {
+      store = createdStore;
+    }
   }
 
   // 2. Fetch counts

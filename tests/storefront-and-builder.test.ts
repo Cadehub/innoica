@@ -13,7 +13,8 @@ import {
   createStoreOrderPayloadSchema,
   hexColorRegex,
 } from '../packages/shared/src/index';
-import { sanitizeUrl, sanitizeText } from '../apps/web/src/lib/sanitize-builder';
+import { sanitizeUrl, sanitizeText, extractMerchantPhone } from '../apps/web/src/lib/sanitize-builder';
+import { signOrderReceipt, verifyOrderReceipt } from '../apps/web/src/lib/order-receipt';
 import {
   hasCommerceCapability,
   requireCommerceCapability,
@@ -117,11 +118,13 @@ describe('Milestone 4: Public Storefront & Visual Store Builder Suite', () => {
       );
       expect(sanitizeUrl('http://innoica.com')).toBe('http://innoica.com');
 
-      // Dangerous schemes must be neutralized to '#'
+      // Dangerous schemes & protocol-relative URLs must be neutralized to '#'
       expect(sanitizeUrl('javascript:alert(1)')).toBe('#');
+      expect(sanitizeUrl('java\tscript:alert(1)')).toBe('#');
       expect(sanitizeUrl('JAVASCRIPT:steal()')).toBe('#');
       expect(sanitizeUrl('data:text/html,<script>alert(1)</script>')).toBe('#');
       expect(sanitizeUrl('vbscript:msgbox(1)')).toBe('#');
+      expect(sanitizeUrl('//evil.com/phishing')).toBe('#');
       expect(sanitizeUrl('https://evil.com/<script>')).toBe('#');
       expect(sanitizeUrl('https://evil.com/"onload="alert(1)')).toBe('#');
       expect(sanitizeUrl(null)).toBe('#');
@@ -326,6 +329,76 @@ describe('Milestone 4: Public Storefront & Visual Store Builder Suite', () => {
       expect(extractStoreSubdomain(createMockReq('localhost:3000'))).toBeNull();
       expect(extractStoreSubdomain(createMockReq('127.0.0.1:3000'))).toBeNull();
       expect(extractStoreSubdomain(createMockReq('preview.vercel.app'))).toBeNull();
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // 6. Store Builder 5-Section Schema & Signed Order Receipts
+  // ------------------------------------------------------------------
+  describe('Visual Store Builder Layout & Guest Order Receipt Integrity', () => {
+    it('accepts the 5 controlled section types and rejects unknown injection types', () => {
+      const validLayout = {
+        themeColor: '#00DF59',
+        announcement: { enabled: true, text: 'Livraison express Douala' },
+        sections: [
+          { id: 'sec-hero-1', type: 'hero', visible: true, order: 0, settings: { title: 'Accueil' } },
+          { id: 'sec-feat-1', type: 'features_banner', visible: true, order: 1, settings: {} },
+          { id: 'sec-cat-1', type: 'catalog_grid', visible: true, order: 2, settings: { itemsLimit: 12 } },
+          { id: 'sec-abt-1', type: 'about', visible: true, order: 3, settings: { contactPhone: '+237699123456' } },
+          { id: 'sec-ftr-1', type: 'footer', visible: true, order: 4, settings: { copyright: '© 2026' } },
+        ],
+      };
+
+      expect(storeLayoutSchema.safeParse(validLayout).success).toBe(true);
+      expect(extractMerchantPhone(validLayout, null)).toBe('+237699123456');
+
+      const maliciousLayout = {
+        themeColor: '#25D366',
+        sections: [
+          { id: 'sec-bad', type: 'raw_iframe_injection', visible: true, order: 0, settings: {} },
+        ],
+      };
+      expect(storeLayoutSchema.safeParse(maliciousLayout).success).toBe(false);
+    });
+
+    it('signs and verifies guest order receipt tokens while rejecting tampering or wrong order', () => {
+      const token = signOrderReceipt({
+        storeSlug: 'oraimo-douala',
+        orderNumber: 'CMD-20261117-0001',
+        orderId: '33333333-3333-3333-3333-333333333333',
+        customerName: 'Marc Nkoa',
+        customerPhone: '+237699123456',
+        deliveryMethod: 'delivery',
+        deliveryAddress: 'Douala Akwa',
+        deliveryFeeXaf: 1500,
+        subtotalXaf: 18500,
+        totalAmountXaf: 20000,
+        paymentMethod: 'cash_on_delivery',
+        paymentStatus: 'pending_verification',
+        items: [
+          {
+            id: 'item-1',
+            product_title: 'FreePods 4',
+            variant_title: null,
+            quantity: 1,
+            unit_price_xaf: 18500,
+            total_price_xaf: 18500,
+          },
+        ],
+        issuedAt: Date.now(),
+      });
+
+      const verified = verifyOrderReceipt(token, 'oraimo-douala', 'CMD-20261117-0001');
+      expect(verified).not.toBeNull();
+      expect(verified?.totalAmountXaf).toBe(20000);
+
+      // Wrong store or order number must fail
+      expect(verifyOrderReceipt(token, 'autre-boutique', 'CMD-20261117-0001')).toBeNull();
+      expect(verifyOrderReceipt(token, 'oraimo-douala', 'CMD-20261117-9999')).toBeNull();
+
+      // Tampered signature must fail
+      const tampered = `${token.slice(0, -3)}xxx`;
+      expect(verifyOrderReceipt(tampered, 'oraimo-douala', 'CMD-20261117-0001')).toBeNull();
     });
   });
 });

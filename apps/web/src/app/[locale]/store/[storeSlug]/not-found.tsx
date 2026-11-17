@@ -1,7 +1,16 @@
+'use client';
+
+import React from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { PackageSearch, ArrowLeft, ShoppingBag } from 'lucide-react';
 
 export default function StoreProductNotFound() {
+  const params = useParams<{ storeSlug?: string }>();
+  const storeSlug = params?.storeSlug;
+  const homeHref = storeSlug ? `/store/${storeSlug}` : '/';
+  const catalogHref = storeSlug ? `/store/${storeSlug}/catalog` : '/';
+
   return (
     <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center antialiased">
       <div className="w-full max-w-md bg-white rounded-2xl border border-zinc-200/80 shadow-xs p-8 animate-fade-in-up">
@@ -19,7 +28,7 @@ export default function StoreProductNotFound() {
 
         <div className="flex flex-col sm:flex-row gap-2 justify-center">
           <Link
-            href="./"
+            href={catalogHref}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-white text-xs font-semibold shadow-xs hover:opacity-90 transition-opacity"
             style={{ backgroundColor: 'var(--store-theme, #25D366)' }}
           >
@@ -27,7 +36,7 @@ export default function StoreProductNotFound() {
             Voir tous les produits
           </Link>
           <Link
-            href="./"
+            href={homeHref}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-zinc-200 bg-white text-zinc-700 text-xs font-semibold hover:bg-zinc-50 transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />

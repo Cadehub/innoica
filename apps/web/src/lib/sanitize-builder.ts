@@ -5,23 +5,25 @@
 
 /**
  * Nettoie et valide une URL de lien ou d'image.
- * Autorise uniquement les ancres relatives ('#...'), chemins internes ('/...'),
+ * Autorise uniquement les ancres relatives ('#...'), chemins internes ('/...', hors '//...'),
  * ou URLs externes sécurisées ('https://' ou 'http://').
  * Rejette formellement les protocoles dangereux ('javascript:', 'data:', 'vbscript:')
- * ainsi que toute tentative d'injection HTML.
+ * ainsi que toute tentative d'injection HTML ou URL relative de protocole ('//').
  */
 export function sanitizeUrl(url?: string | null, fallback: string = '#'): string {
   if (!url) return fallback;
-  const trimmed = url.trim();
+  // Supprimer les caractères de contrôle invisibles utilisés pour contourner les filtres (ex: java\tscript:)
+  const trimmed = url.replace(/[\u0000-\u001F\u007F]/g, '').trim();
   if (!trimmed) return fallback;
 
   const lower = trimmed.toLowerCase();
 
-  // Rejet immédiat des schémas dangereux et caractères d'injection HTML
+  // Rejet immédiat des schémas dangereux, URLs protocol-relative et caractères d'injection HTML
   if (
     lower.startsWith('javascript:') ||
     lower.startsWith('data:') ||
     lower.startsWith('vbscript:') ||
+    trimmed.startsWith('//') ||
     lower.includes('<') ||
     lower.includes('>') ||
     lower.includes('"') ||
@@ -36,7 +38,7 @@ export function sanitizeUrl(url?: string | null, fallback: string = '#'): string
     return trimmed;
   }
 
-  // Autoriser les chemins relatifs (/store/..., /catalog, etc.)
+  // Autoriser les chemins relatifs internes (/store/..., /catalog, etc.)
   if (trimmed.startsWith('/')) {
     return trimmed;
   }
@@ -59,4 +61,28 @@ export function sanitizeText(text?: string | null): string {
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
     .replace(/<[^>]+>/g, '')
     .trim();
+}
+
+/**
+ * Extrait le premier numéro camerounais/WhatsApp depuis les réglages du builder ou la description
+ */
+export function extractMerchantPhone(
+  builderLayout: any,
+  fallbackDescription?: string | null
+): string {
+  const sections = Array.isArray(builderLayout?.sections) ? builderLayout.sections : [];
+  for (const type of ['about', 'footer']) {
+    const sec = sections.find((s: any) => s?.type === type);
+    const phone = sec?.settings?.contactPhone;
+    if (typeof phone === 'string' && phone.replace(/\D/g, '').length >= 8) {
+      return phone.trim();
+    }
+  }
+  if (fallbackDescription) {
+    const match = fallbackDescription.match(/(?:\+?237[\s.-]?)?[26](?:[\s.-]?\d){8}/);
+    if (match) {
+      return match[0].trim();
+    }
+  }
+  return '';
 }

@@ -18,6 +18,8 @@ interface StoreSettingsClientProps {
     store_name: string;
     store_slug: string;
     description: string | null;
+    logo_url?: string | null;
+    banner_url?: string | null;
     currency: string;
     is_active: boolean;
   };
@@ -33,6 +35,8 @@ export function StoreSettingsClient({
   const [storeName, setStoreName] = useState(initialStore.store_name);
   const [storeSlug, setStoreSlug] = useState(initialStore.store_slug);
   const [description, setDescription] = useState(initialStore.description || '');
+  const [logoUrl, setLogoUrl] = useState(initialStore.logo_url || '');
+  const [bannerUrl, setBannerUrl] = useState(initialStore.banner_url || '');
   const [currency, setCurrency] = useState(initialStore.currency || 'XAF');
   const [isActive, setIsActive] = useState(initialStore.is_active);
 
@@ -84,6 +88,8 @@ export function StoreSettingsClient({
           storeName: storeName.trim(),
           storeSlug: storeSlug.trim(),
           description: description.trim() || null,
+          logoUrl: logoUrl.trim() || null,
+          bannerUrl: bannerUrl.trim() || null,
           currency,
           isActive,
         }),
@@ -180,6 +186,30 @@ export function StoreSettingsClient({
               placeholder="Présentez votre boutique et indiquez votre numéro WhatsApp pour les commandes directes (ex: +237 6XXXXXXXX)..."
               className="w-full px-3.5 py-2 text-xs rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-400"
             />
+          </div>
+
+          {/* Logo & Banner URLs */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-zinc-800">Logo (URL HTTPS)</label>
+              <input
+                type="url"
+                value={logoUrl}
+                onChange={(e) => setLogoUrl(e.target.value)}
+                placeholder="https://..."
+                className="w-full px-3.5 py-2 text-xs rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-zinc-800">Bannière OG / Store (URL HTTPS)</label>
+              <input
+                type="url"
+                value={bannerUrl}
+                onChange={(e) => setBannerUrl(e.target.value)}
+                placeholder="https://..."
+                className="w-full px-3.5 py-2 text-xs rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              />
+            </div>
           </div>
 
           {/* Currency */}

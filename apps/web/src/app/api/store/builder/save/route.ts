@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { getActiveWorkspaceContext } from '@/lib/workspace';
 import { assertCommerceApiAccess } from '@/lib/feature-gating';
-import { storeLayoutSchema, hexColorRegex } from '@innoica/shared';
+import { storeLayoutSchema, hexColorRegex, isReservedStoreSlug } from '@innoica/shared';
 import { sanitizeText, sanitizeUrl } from '@/lib/sanitize-builder';
 
 export async function POST(request: NextRequest) {
@@ -18,6 +19,13 @@ export async function POST(request: NextRequest) {
 
     if (!layout) {
       return NextResponse.json({ success: false, error: 'Layout manquant' }, { status: 400 });
+    }
+
+    if (action !== 'draft' && action !== 'publish') {
+      return NextResponse.json(
+        { success: false, error: 'Action invalide (draft ou publish attendu)' },
+        { status: 400 }
+      );
     }
 
     // Validate layout with Zod
@@ -43,6 +51,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Sanitize announcement text
+    const sanitizedAnnouncement = {
+      enabled: Boolean(validatedLayout.announcement?.enabled ?? true),
+      text: sanitizeText(validatedLayout.announcement?.text || ''),
+    };
+
     // Deep sanitize sections to prevent XSS in text and links
     const sanitizedSections = (validatedLayout.sections || []).map((sec: any) => {
       const sanitizedSettings: Record<string, unknown> = {};
@@ -51,7 +65,7 @@ export async function POST(request: NextRequest) {
         for (const [key, val] of Object.entries(sec.settings)) {
           if (typeof val === 'string') {
             if (key.toLowerCase().includes('url') || key.toLowerCase().includes('link')) {
-              sanitizedSettings[key] = sanitizeUrl(val);
+              sanitizedSettings[key] = val.trim() ? sanitizeUrl(val, key.toLowerCase().includes('image') ? '' : '#') : '';
             } else {
               sanitizedSettings[key] = sanitizeText(val);
             }
@@ -74,7 +88,7 @@ export async function POST(request: NextRequest) {
       }
 
       return {
-        id: sec.id,
+        id: sanitizeText(sec.id) || `sec-${sec.type}`,
         type: sec.type,
         visible: Boolean(sec.visible),
         order: Number(sec.order) || 0,
@@ -85,9 +99,9 @@ export async function POST(request: NextRequest) {
     // Fetch current store_settings to maintain history & draft
     const { data: currentStore } = await supabase
       .from('store_settings')
-      .select('id, builder_layout, theme_color')
+      .select('id, store_slug, builder_layout, theme_color')
       .eq('workspace_id', ctx!.workspace.id)
-      .single();
+      .maybeSingle();
 
     const existingLayout = (currentStore?.builder_layout as any) || {};
     const existingHistory = Array.isArray(existingLayout.history) ? existingLayout.history : [];
@@ -95,51 +109,99 @@ export async function POST(request: NextRequest) {
     let updatedBuilderLayout: any;
 
     if (action === 'draft') {
-      // Save draft only
+      // Save draft only (preserve published sections and themeColor)
       updatedBuilderLayout = {
         ...existingLayout,
+        themeColor: existingLayout.themeColor || currentStore?.theme_color || '#25D366',
+        sections: Array.isArray(existingLayout.sections) ? existingLayout.sections : [],
         draft: {
           themeColor: validatedLayout.themeColor,
           sections: sanitizedSections,
-          announcement: validatedLayout.announcement || { enabled: true, text: '' },
+          announcement: sanitizedAnnouncement,
           savedAt: new Date().toISOString(),
         },
       };
     } else {
       // Action: 'publish'
-      // 1. Snapshot previous layout into history (capped at 5 snapshots)
-      const previousSnapshot = {
-        themeColor: currentStore?.theme_color || existingLayout.themeColor || '#25D366',
-        sections: existingLayout.sections || [],
-        announcement: existingLayout.announcement || { enabled: true, text: '' },
-        publishedAt: new Date().toISOString(),
-        version: (existingHistory.length || 0) + 1,
-      };
-
-      const updatedHistory = [previousSnapshot, ...existingHistory].slice(0, 5);
+      const hasExistingPublished = Array.isArray(existingLayout.sections) && existingLayout.sections.length > 0;
+      const updatedHistory = hasExistingPublished
+        ? [
+            {
+              themeColor: currentStore?.theme_color || existingLayout.themeColor || '#25D366',
+              sections: existingLayout.sections,
+              announcement: existingLayout.announcement || { enabled: true, text: '' },
+              publishedAt: new Date().toISOString(),
+              version: (existingHistory[0]?.version || existingHistory.length || 0) + 1,
+            },
+            ...existingHistory,
+          ].slice(0, 5)
+        : existingHistory;
 
       updatedBuilderLayout = {
         themeColor: validatedLayout.themeColor,
         sections: sanitizedSections,
-        announcement: validatedLayout.announcement || { enabled: true, text: '' },
+        announcement: sanitizedAnnouncement,
         history: updatedHistory,
         publishedAt: new Date().toISOString(),
       };
     }
 
-    const { data: updated, error } = await supabase
-      .from('store_settings')
-      .update({
-        theme_color: validatedLayout.themeColor,
+    let updated: any;
+    let saveError: any;
+
+    if (currentStore) {
+      const updatePayload: Record<string, unknown> = {
         builder_layout: updatedBuilderLayout,
         updated_at: new Date().toISOString(),
-      })
-      .eq('workspace_id', ctx!.workspace.id)
-      .select()
-      .single();
+      };
+      if (action === 'publish') {
+        updatePayload.theme_color = validatedLayout.themeColor;
+      }
 
-    if (error) {
-      return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+      const res = await supabase
+        .from('store_settings')
+        .update(updatePayload)
+        .eq('workspace_id', ctx!.workspace.id)
+        .select()
+        .single();
+      updated = res.data;
+      saveError = res.error;
+    } else {
+      // Auto-provision store_settings if merchant hasn't opened /store yet
+      let defaultSlug = (ctx!.workspace.slug || 'boutique')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      if (!defaultSlug || defaultSlug.length < 2 || isReservedStoreSlug(defaultSlug)) {
+        defaultSlug = `boutique-${ctx!.workspace.id.slice(0, 8)}`;
+      }
+
+      const res = await supabase
+        .from('store_settings')
+        .insert({
+          workspace_id: ctx!.workspace.id,
+          store_slug: defaultSlug,
+          store_name: ctx!.workspace.name || 'Ma Boutique',
+          theme_color: validatedLayout.themeColor,
+          builder_layout: updatedBuilderLayout,
+          is_active: true,
+        })
+        .select()
+        .single();
+      updated = res.data;
+      saveError = res.error;
+    }
+
+    if (saveError || !updated) {
+      return NextResponse.json(
+        { success: false, error: saveError?.message || 'Échec de sauvegarde' },
+        { status: 400 }
+      );
+    }
+
+    if (action === 'publish' && updated.store_slug) {
+      revalidatePath(`/fr/store/${updated.store_slug}`);
+      revalidatePath(`/en/store/${updated.store_slug}`);
     }
 
     return NextResponse.json({

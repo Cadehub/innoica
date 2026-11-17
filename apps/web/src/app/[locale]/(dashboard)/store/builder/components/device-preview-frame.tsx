@@ -10,6 +10,7 @@ import { AboutSection } from '@/components/storefront/about-section';
 import { FooterSection } from '@/components/storefront/footer-section';
 import { StoreBuilderSection } from '@innoica/shared';
 import { ProductCardData } from '@/components/store/product-card';
+import { CartProvider } from '@/components/store/cart-context';
 
 // Sample mock products for realistic preview if merchant catalog is empty
 const SAMPLE_MOCK_PRODUCTS: ProductCardData[] = [
@@ -149,11 +150,17 @@ export function DevicePreviewFrame({
       </div>
 
       {/* Frame Canvas Wrapper */}
-      <div className="flex-1 overflow-y-auto p-4 flex justify-center items-start bg-zinc-100/70 rounded-2xl mt-3 studio-scroll">
-        <div
-          className={`bg-[#fafafb] transition-all duration-300 overflow-hidden min-h-[500px] ${getFrameWidthClass()}`}
-          style={{ '--store-theme': themeColor } as React.CSSProperties}
-        >
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center bg-zinc-100/70 rounded-2xl mt-3 studio-scroll">
+        {sampleProducts.length === 0 && (
+          <div className="mb-3 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium">
+            Aperçu avec articles de démonstration — ajoutez vos produits pour afficher votre vrai catalogue.
+          </div>
+        )}
+        <CartProvider storeSlug={storeSlug || 'preview'}>
+          <div
+            className={`bg-[#fafafb] transition-all duration-300 overflow-hidden min-h-[500px] ${getFrameWidthClass()}`}
+            style={{ '--store-theme': themeColor } as React.CSSProperties}
+          >
           {/* Mock Announcement */}
           {announcement.enabled !== false && (
             <AnnouncementBar
@@ -246,6 +253,7 @@ export function DevicePreviewFrame({
             })}
           </div>
         </div>
+        </CartProvider>
       </div>
     </div>
   );

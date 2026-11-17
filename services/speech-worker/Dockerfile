@@ -15,6 +15,7 @@ RUN mkdir -p /app/models
 COPY services/speech-worker/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY services/speech-worker/bootstrap_env.py ./bootstrap_env.py
 COPY services/speech-worker/audio_utils.py ./audio_utils.py
 COPY services/speech-worker/transcriber.py ./transcriber.py
 COPY services/speech-worker/app.py ./app.py

@@ -17,6 +17,11 @@ interface CatalogClientProps {
   storeSlug: string;
   themeColor?: string;
   initialQuery?: string;
+  initialCategory?: string;
+  initialMinPrice?: string;
+  initialMaxPrice?: string;
+  initialSort?: string;
+  initialInStockOnly?: boolean;
 }
 
 export function CatalogClient({
@@ -25,12 +30,32 @@ export function CatalogClient({
   storeSlug,
   themeColor = '#25D366',
   initialQuery = '',
+  initialCategory = 'all',
+  initialMinPrice = '',
+  initialMaxPrice = '',
+  initialSort = 'popular',
+  initialInStockOnly = false,
 }: CatalogClientProps) {
+  const matchedCategory =
+    initialCategory !== 'all'
+      ? categories.find(
+          (c) =>
+            c.slug.toLowerCase() === initialCategory.toLowerCase() ||
+            c.name.toLowerCase() === initialCategory.toLowerCase()
+        )?.name || initialCategory
+      : 'all';
+
   const [search, setSearch] = useState(initialQuery);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [sortOption, setSortOption] = useState<'popular' | 'price_asc' | 'price_desc' | 'newest'>('popular');
-  const [inStockOnly, setInStockOnly] = useState<boolean>(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>(matchedCategory);
+  const [sortOption, setSortOption] = useState<'popular' | 'price_asc' | 'price_desc' | 'newest'>(
+    (['popular', 'price_asc', 'price_desc', 'newest'].includes(initialSort)
+      ? initialSort
+      : 'popular') as any
+  );
+  const [inStockOnly, setInStockOnly] = useState<boolean>(initialInStockOnly);
   const [pricePreset, setPricePreset] = useState<'all' | 'under10k' | '10k-25k' | '25k-50k' | 'above50k'>('all');
+  const [minPrice, setMinPrice] = useState<string>(initialMinPrice);
+  const [maxPrice, setMaxPrice] = useState<string>(initialMaxPrice);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const filteredAndSorted = useMemo(() => {
@@ -65,6 +90,16 @@ export function CatalogClient({
       list = list.filter((p) => p.base_price_xaf > 50000);
     }
 
+    // Custom min/max FCFA range
+    const parsedMin = minPrice.trim() ? Number(minPrice) : null;
+    const parsedMax = maxPrice.trim() ? Number(maxPrice) : null;
+    if (parsedMin !== null && !Number.isNaN(parsedMin)) {
+      list = list.filter((p) => p.base_price_xaf >= parsedMin);
+    }
+    if (parsedMax !== null && !Number.isNaN(parsedMax)) {
+      list = list.filter((p) => p.base_price_xaf <= parsedMax);
+    }
+
     // Sort
     switch (sortOption) {
       case 'price_asc':
@@ -84,7 +119,7 @@ export function CatalogClient({
     }
 
     return list;
-  }, [initialProducts, search, selectedCategory, inStockOnly, pricePreset, sortOption]);
+  }, [initialProducts, search, selectedCategory, inStockOnly, pricePreset, minPrice, maxPrice, sortOption]);
 
   const resetFilters = () => {
     setSearch('');
@@ -92,6 +127,8 @@ export function CatalogClient({
     setSortOption('popular');
     setInStockOnly(false);
     setPricePreset('all');
+    setMinPrice('');
+    setMaxPrice('');
   };
 
   return (
@@ -209,6 +246,24 @@ export function CatalogClient({
                   {p.label}
                 </button>
               ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              <input
+                type="number"
+                min={0}
+                placeholder="Min FCFA"
+                value={minPrice}
+                onChange={(e) => setMinPrice(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 bg-white focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              />
+              <input
+                type="number"
+                min={0}
+                placeholder="Max FCFA"
+                value={maxPrice}
+                onChange={(e) => setMaxPrice(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 bg-white focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              />
             </div>
           </div>
 

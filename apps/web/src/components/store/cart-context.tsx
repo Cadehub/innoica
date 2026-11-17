@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from 'react';
 
 export interface CartItem {
   productId: string;
@@ -31,15 +31,16 @@ interface CartContextValue {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function getOrCreateCartToken(storeSlug: string): string {
   if (typeof window === 'undefined') return '';
   const storageKey = `innoica_cart_token_${storeSlug}`;
   let token = localStorage.getItem(storageKey);
-  if (!token) {
+  if (!token || !UUID_REGEX.test(token)) {
     token = crypto.randomUUID();
     localStorage.setItem(storageKey, token);
   }
-  // Synchronise also in cookie for 30 days
   document.cookie = `innoica_cart_${storeSlug}=${token}; path=/; max-age=2592000; SameSite=Lax`;
   return token;
 }
@@ -55,13 +56,16 @@ export function CartProvider({
   const [isOpen, setIsOpen] = useState(false);
   const [cartToken, setCartToken] = useState<string>('');
   const [isHydrated, setIsHydrated] = useState(false);
+  const tokenRef = useRef<string>('');
 
   const itemsStorageKey = `innoica_cart_items_${storeSlug}`;
 
-  // Initialisation au montage côté client
+  // Initialisation côté client + synchronisation Supabase Cart API
   useEffect(() => {
+    let active = true;
     try {
       const token = getOrCreateCartToken(storeSlug);
+      tokenRef.current = token;
       setCartToken(token);
 
       const saved = localStorage.getItem(itemsStorageKey);
@@ -71,14 +75,31 @@ export function CartProvider({
           setItems(parsed);
         }
       }
+
+      if (storeSlug && storeSlug !== 'preview' && token) {
+        fetch(`/api/store/${encodeURIComponent(storeSlug)}/cart?cartToken=${encodeURIComponent(token)}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (!active || !data?.success || !Array.isArray(data.items)) return;
+            if (data.items.length > 0) {
+              setItems(data.items);
+            }
+          })
+          .catch(() => {
+            // Keep localStorage fallback silently
+          });
+      }
     } catch {
       // Ignore localStorage errors
     } finally {
       setIsHydrated(true);
     }
+    return () => {
+      active = false;
+    };
   }, [storeSlug, itemsStorageKey]);
 
-  // Sauvegarde des articles à chaque mutation
+  // Sauvegarde locale des articles à chaque mutation
   useEffect(() => {
     if (!isHydrated) return;
     try {
@@ -101,6 +122,28 @@ export function CartProvider({
   const openCart = () => setIsOpen(true);
   const closeCart = () => setIsOpen(false);
   const toggleCart = () => setIsOpen((prev) => !prev);
+
+  const syncCartMutation = (method: 'POST' | 'PATCH' | 'DELETE', payload?: Record<string, unknown>) => {
+    if (!storeSlug || storeSlug === 'preview') return;
+    const token = tokenRef.current || cartToken;
+    if (!token) return;
+
+    if (method === 'DELETE') {
+      const qs = new URLSearchParams({ cartToken: token });
+      if (payload?.productId) qs.set('productId', String(payload.productId));
+      if (payload?.variantId) qs.set('variantId', String(payload.variantId));
+      fetch(`/api/store/${encodeURIComponent(storeSlug)}/cart?${qs.toString()}`, {
+        method: 'DELETE',
+      }).catch(() => {});
+      return;
+    }
+
+    fetch(`/api/store/${encodeURIComponent(storeSlug)}/cart`, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, cartToken: token }),
+    }).catch(() => {});
+  };
 
   const addItem = (newItem: Omit<CartItem, 'quantity'> & { quantity?: number }) => {
     const qty = newItem.quantity || 1;
@@ -134,6 +177,14 @@ export function CartProvider({
       ];
     });
 
+    if (UUID_REGEX.test(newItem.productId)) {
+      syncCartMutation('POST', {
+        productId: newItem.productId,
+        variantId: newItem.variantId || null,
+        quantity: qty,
+      });
+    }
+
     setIsOpen(true);
   };
 
@@ -157,6 +208,14 @@ export function CartProvider({
         return item;
       })
     );
+
+    if (UUID_REGEX.test(productId)) {
+      syncCartMutation('PATCH', {
+        productId,
+        variantId: variantId || null,
+        quantity,
+      });
+    }
   };
 
   const removeItem = (productId: string, variantId?: string | null) => {
@@ -165,6 +224,13 @@ export function CartProvider({
         (item) => !(item.productId === productId && item.variantId === (variantId || null))
       )
     );
+
+    if (UUID_REGEX.test(productId)) {
+      syncCartMutation('DELETE', {
+        productId,
+        variantId: variantId || null,
+      });
+    }
   };
 
   const clearCart = () => {
@@ -174,6 +240,7 @@ export function CartProvider({
     } catch {
       // Ignore
     }
+    syncCartMutation('DELETE');
   };
 
   return (

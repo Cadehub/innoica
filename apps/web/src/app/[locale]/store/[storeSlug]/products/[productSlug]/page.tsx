@@ -3,6 +3,7 @@ import type { Metadata, ResolvingMetadata } from 'next';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { ProductDetailsClient } from './product-details-client';
+import { extractMerchantPhone } from '@/lib/sanitize-builder';
 
 interface ProductPageProps {
   params: Promise<{ locale: string; storeSlug: string; productSlug: string }>;
@@ -143,7 +144,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
       product={productData}
       storeSlug={storeSlug}
       storeName={store.store_name}
-      merchantWhatsAppPhone={store.description || ''}
+      merchantWhatsAppPhone={extractMerchantPhone(store.builder_layout, store.description)}
       themeColor={store.theme_color || '#25D366'}
     />
   );

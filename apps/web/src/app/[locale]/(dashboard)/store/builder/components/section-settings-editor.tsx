@@ -101,6 +101,17 @@ export function SectionSettingsEditor({
               />
             </div>
           </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-zinc-700">Image Bannière (URL HTTPS)</label>
+            <input
+              type="url"
+              value={(settings.imageUrl as string) || ''}
+              onChange={(e) => handleFieldChange('imageUrl', e.target.value)}
+              placeholder="https://images.unsplash.com/..."
+              className="w-full px-3 py-1.5 text-xs rounded-xl border border-zinc-200 focus:outline-none"
+            />
+          </div>
         </div>
       )}
 
@@ -140,6 +151,16 @@ export function SectionSettingsEditor({
               className="w-full px-3 py-1.5 text-xs rounded-xl border border-zinc-200 focus:outline-none"
             />
           </div>
+
+          <label className="flex items-center justify-between pt-1 cursor-pointer">
+            <span className="text-[11px] font-bold text-zinc-700">Afficher les filtres & recherche</span>
+            <input
+              type="checkbox"
+              checked={settings.showCategoriesFilter !== false}
+              onChange={(e) => handleFieldChange('showCategoriesFilter', e.target.checked)}
+              className="rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+            />
+          </label>
         </div>
       )}
 
@@ -189,6 +210,17 @@ export function SectionSettingsEditor({
               className="w-full px-3 py-1.5 text-xs rounded-xl border border-zinc-200 focus:outline-none"
             />
           </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-zinc-700">Photo Boutique (URL HTTPS)</label>
+            <input
+              type="url"
+              value={(settings.imageUrl as string) || ''}
+              onChange={(e) => handleFieldChange('imageUrl', e.target.value)}
+              placeholder="https://images.unsplash.com/..."
+              className="w-full px-3 py-1.5 text-xs rounded-xl border border-zinc-200 focus:outline-none"
+            />
+          </div>
         </div>
       )}
 
@@ -232,11 +264,63 @@ export function SectionSettingsEditor({
 
       {/* Features Banner Settings */}
       {section.type === 'features_banner' && (
-        <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-600">
-          <p className="font-bold text-zinc-800">Garanties Standard Oraimo :</p>
-          <p className="text-[11px] text-zinc-500 mt-1">
-            Les 4 badges de confiance (Livraison Rapide, Garantie 100%, Paiement sécurisé et Support WhatsApp) sont optimisés automatiquement pour le marché camerounais.
-          </p>
+        <div className="space-y-3">
+          <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-600">
+            <p className="font-bold text-zinc-800">Badges de Confiance (4 max)</p>
+            <p className="text-[11px] text-zinc-500 mt-0.5">
+              Personnalisez les garanties affichées sous votre bannière principale.
+            </p>
+          </div>
+          {[0, 1, 2, 3].map((idx) => {
+            const defaultItems = [
+              { icon: 'truck', title: 'Livraison Rapide', description: 'Douala & Yaoundé sous 24h' },
+              { icon: 'shield', title: 'Garantie Authentique', description: 'Articles neufs vérifiés' },
+              { icon: 'payment', title: 'Paiement Flexible', description: 'Cash livraison ou Mobile Money' },
+              { icon: 'whatsapp', title: 'Support WhatsApp 7j/7', description: 'Assistance client directe' },
+            ];
+            const currentItems = Array.isArray(settings.items) && settings.items.length > 0
+              ? (settings.items as Array<{ icon?: string; title?: string; description?: string }>)
+              : defaultItems;
+            const item = currentItems[idx] || defaultItems[idx];
+
+            const updateItem = (field: 'icon' | 'title' | 'description', value: string) => {
+              const next = defaultItems.map((def, i) => ({ ...(currentItems[i] || def) }));
+              next[idx] = { ...next[idx], [field]: value };
+              handleFieldChange('items', next);
+            };
+
+            return (
+              <div key={idx} className="p-2.5 rounded-xl border border-zinc-200 space-y-2 bg-white">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold uppercase text-zinc-400">Badge #{idx + 1}</span>
+                  <select
+                    value={item.icon || 'truck'}
+                    onChange={(e) => updateItem('icon', e.target.value)}
+                    className="px-2 py-1 text-[11px] rounded-lg border border-zinc-200 bg-zinc-50"
+                  >
+                    <option value="truck">Livraison (Camion)</option>
+                    <option value="shield">Garantie (Bouclier)</option>
+                    <option value="payment">Paiement (Billet)</option>
+                    <option value="whatsapp">WhatsApp (Message)</option>
+                  </select>
+                </div>
+                <input
+                  type="text"
+                  value={item.title || ''}
+                  onChange={(e) => updateItem('title', e.target.value)}
+                  placeholder="Titre du badge"
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={item.description || ''}
+                  onChange={(e) => updateItem('description', e.target.value)}
+                  placeholder="Courte description"
+                  className="w-full px-2.5 py-1.5 text-[11px] rounded-lg border border-zinc-200 focus:outline-none"
+                />
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

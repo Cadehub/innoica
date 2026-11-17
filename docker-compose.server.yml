@@ -49,10 +49,17 @@ services:
       - PORT=4001
       - SESSIONS_DIR=/app/sessions
       - SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - WORKER_INTERNAL_SECRET=${WORKER_INTERNAL_SECRET}
       - AI_RUNTIME_URL=http://ai-runtime:4002
       - SPEECH_WORKER_URL=http://speech-worker:4004
+      - REDIS_HOST=host.docker.internal
+      - REDIS_PORT=6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - innoica_wa_sessions:/app/sessions
     networks:
@@ -71,11 +78,18 @@ services:
       - NODE_ENV=production
       - PORT=4002
       - SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}
       - WORKER_INTERNAL_SECRET=${WORKER_INTERNAL_SECRET}
       - WHATSAPP_WORKER_URL=http://whatsapp-worker:4001
       - SPEECH_WORKER_URL=http://speech-worker:4004
+      - REDIS_HOST=host.docker.internal
+      - REDIS_PORT=6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - innoica-network
 
@@ -113,6 +127,9 @@ services:
       - NODE_ENV=production
       - PORT=4003
       - SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     networks:
       - innoica-network

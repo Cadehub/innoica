@@ -6,9 +6,11 @@ faster-whisper INT8 inference on CPU with bounded concurrency and zero paid APIs
 
 from __future__ import annotations
 
-import bootstrap_env
-
-bootstrap_env.bootstrap()
+try:
+    import bootstrap_env
+    bootstrap_env.bootstrap()
+except ImportError:
+    pass
 
 import asyncio
 import hmac

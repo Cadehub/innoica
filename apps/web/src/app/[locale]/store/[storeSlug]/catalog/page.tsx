@@ -5,12 +5,19 @@ import { CatalogClient } from './catalog-client';
 
 interface CatalogPageProps {
   params: Promise<{ locale: string; storeSlug: string }>;
-  searchParams: Promise<{ q?: string; category?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    category?: string;
+    minPrice?: string;
+    maxPrice?: string;
+    sort?: string;
+    inStock?: string;
+  }>;
 }
 
 export default async function CatalogPage({ params, searchParams }: CatalogPageProps) {
   const { storeSlug } = await params;
-  const { q } = await searchParams;
+  const { q, category, minPrice, maxPrice, sort, inStock } = await searchParams;
   const supabase = await createClient();
 
   const { data: store } = await supabase
@@ -71,6 +78,11 @@ export default async function CatalogPage({ params, searchParams }: CatalogPageP
       storeSlug={storeSlug}
       themeColor={store.theme_color || '#25D366'}
       initialQuery={q || ''}
+      initialCategory={category || 'all'}
+      initialMinPrice={minPrice || ''}
+      initialMaxPrice={maxPrice || ''}
+      initialSort={sort || 'popular'}
+      initialInStockOnly={inStock === 'true' || inStock === '1'}
     />
   );
 }
