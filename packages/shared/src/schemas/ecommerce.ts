@@ -202,8 +202,22 @@ export const storeSettingsSchema = z.object({
     .min(2, 'Le nom de la boutique doit comporter au moins 2 caractères')
     .max(100, 'Le nom ne doit pas dépasser 100 caractères'),
   description: z.string().trim().max(1000).nullable().optional(),
-  logoUrl: z.string().url('URL du logo invalide').nullable().optional(),
-  bannerUrl: z.string().url('URL de bannière invalide').nullable().optional(),
+  logoUrl: z
+    .string()
+    .url('URL du logo invalide')
+    .refine((val) => !val || /^https?:\/\//i.test(val), {
+      message: 'URL HTTP ou HTTPS requise',
+    })
+    .nullable()
+    .optional(),
+  bannerUrl: z
+    .string()
+    .url('URL de bannière invalide')
+    .refine((val) => !val || /^https?:\/\//i.test(val), {
+      message: 'URL HTTP ou HTTPS requise',
+    })
+    .nullable()
+    .optional(),
   themeColor: z.string().regex(hexColorRegex).default('#25D366'),
   currency: z.string().default('XAF'),
   isActive: z.boolean().default(true),
@@ -236,7 +250,16 @@ export const productSchema = z.object({
   basePriceXaf: z.number().int('Le prix doit être un entier en FCFA').min(0, 'Le prix ne peut être négatif'),
   compareAtPriceXaf: z.number().int().min(0).nullable().optional(),
   costPriceXaf: z.number().int().min(0).nullable().optional(),
-  images: z.array(z.string().url()).default([]),
+  images: z
+    .array(
+      z
+        .string()
+        .url('URL d’image invalide')
+        .refine((val) => !val || /^https?:\/\//i.test(val), {
+          message: 'URL HTTP ou HTTPS requise',
+        })
+    )
+    .default([]),
   sku: z.string().trim().max(50).nullable().optional(),
   barcode: z.string().trim().max(50).nullable().optional(),
   isActive: z.boolean().default(true),
@@ -397,6 +420,35 @@ export const createStoreOrderPayloadSchema = z
         path: ['deliveryAddress'],
         message: 'Une adresse de livraison est requise pour le mode livraison',
       });
+    }
+
+    // Le paiement au retrait n'est pas disponible pour la livraison à domicile
+    if (data.deliveryMethod === 'delivery' && data.paymentMethod === 'pickup') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['paymentMethod'],
+        message: "Le mode de paiement au retrait n'est pas disponible pour la livraison à domicile",
+      });
+    }
+
+    // Paiement Mobile Money manuel : référence de transaction et numéro camerounais obligatoires
+    if (data.paymentMethod === 'manual_mobile_money') {
+      if (!data.manualPaymentRef || data.manualPaymentRef.trim().length < 3) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['manualPaymentRef'],
+          message: 'La référence de transaction Mobile Money est requise',
+        });
+      }
+
+      const cleanManualPhone = (data.manualPaymentPhone || '').replace(/[\s.-]/g, '').trim();
+      if (!cleanManualPhone || !cameroonPhoneRegex.test(cleanManualPhone)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['manualPaymentPhone'],
+          message: 'Numéro Mobile Money camerounais valide requis (ex: +237 6XXXXXXXX ou 6XXXXXXXX)',
+        });
+      }
     }
   });
 

@@ -16,6 +16,8 @@ export interface ProductCardData {
   images: string[];
   stock_quantity: number;
   track_stock?: boolean;
+  has_variants?: boolean;
+  is_featured?: boolean;
   category_name?: string | null;
 }
 
@@ -48,7 +50,7 @@ export function ProductCard({
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (isOutOfStock) return;
+    if (isOutOfStock || product.has_variants) return;
 
     addItem({
       productId: product.id,
@@ -130,35 +132,46 @@ export function ProductCard({
         </div>
       </Link>
 
-      {/* Quick Add CTA */}
+      {/* Quick Add / Variant Selection CTA */}
       <div className="p-3 pt-0">
-        <button
-          type="button"
-          onClick={handleQuickAdd}
-          disabled={isOutOfStock}
-          className={`w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs ${
-            isOutOfStock
-              ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed'
-              : added
-              ? 'bg-emerald-600 text-white'
-              : 'text-white hover:brightness-105 active:scale-98 cursor-pointer'
-          }`}
-          style={!isOutOfStock && !added ? { backgroundColor: themeColor } : undefined}
-        >
-          {added ? (
-            <>
-              <Check className="h-3.5 w-3.5" />
-              <span>Ajouté !</span>
-            </>
-          ) : isOutOfStock ? (
-            <span>Épuisé</span>
-          ) : (
-            <>
-              <ShoppingBag className="h-3.5 w-3.5" />
-              <span>Ajouter</span>
-            </>
-          )}
-        </button>
+        {product.has_variants ? (
+          <Link
+            href={`/store/${storeSlug}/products/${product.slug}`}
+            className="w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs text-white hover:brightness-105 active:scale-98"
+            style={{ backgroundColor: themeColor }}
+          >
+            <ShoppingBag className="h-3.5 w-3.5" />
+            <span>Choisir une option</span>
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={handleQuickAdd}
+            disabled={isOutOfStock}
+            className={`w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs ${
+              isOutOfStock
+                ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed'
+                : added
+                ? 'bg-emerald-600 text-white'
+                : 'text-white hover:brightness-105 active:scale-98 cursor-pointer'
+            }`}
+            style={!isOutOfStock && !added ? { backgroundColor: themeColor } : undefined}
+          >
+            {added ? (
+              <>
+                <Check className="h-3.5 w-3.5" />
+                <span>Ajouté !</span>
+              </>
+            ) : isOutOfStock ? (
+              <span>Épuisé</span>
+            ) : (
+              <>
+                <ShoppingBag className="h-3.5 w-3.5" />
+                <span>Ajouter</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
     </div>
   );

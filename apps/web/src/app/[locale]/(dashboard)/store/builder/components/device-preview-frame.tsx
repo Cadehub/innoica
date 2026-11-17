@@ -156,7 +156,7 @@ export function DevicePreviewFrame({
             Aperçu avec articles de démonstration — ajoutez vos produits pour afficher votre vrai catalogue.
           </div>
         )}
-        <CartProvider storeSlug={storeSlug || 'preview'}>
+        <CartProvider storeSlug="preview">
           <div
             className={`bg-[#fafafb] transition-all duration-300 overflow-hidden min-h-[500px] ${getFrameWidthClass()}`}
             style={{ '--store-theme': themeColor } as React.CSSProperties}

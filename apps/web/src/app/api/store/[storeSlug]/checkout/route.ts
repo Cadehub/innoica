@@ -12,7 +12,16 @@ export async function POST(
 ) {
   try {
     const { storeSlug } = await params;
-    const body = await request.json();
+
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, error: 'Corps JSON invalide' },
+        { status: 400 }
+      );
+    }
 
     // Normalize phone whitespace/dashes before Cameroon phone regex validation
     const normalizedPhone =
@@ -20,9 +29,15 @@ export async function POST(
         ? body.customerPhone.replace(/[\s.-]/g, '').trim()
         : body?.customerPhone;
 
+    const normalizedManualPhone =
+      typeof body?.manualPaymentPhone === 'string'
+        ? body.manualPaymentPhone.replace(/[\s.-]/g, '').trim()
+        : body?.manualPaymentPhone;
+
     const payloadWithSlug = {
       ...body,
       customerPhone: normalizedPhone,
+      manualPaymentPhone: normalizedManualPhone,
       storeSlug,
     };
 

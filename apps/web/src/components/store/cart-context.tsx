@@ -23,7 +23,7 @@ interface CartContextValue {
   openCart: () => void;
   closeCart: () => void;
   toggleCart: () => void;
-  addItem: (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => void;
+  addItem: (item: Omit<CartItem, 'quantity'> & { quantity?: number; openDrawer?: boolean }) => void;
   updateQuantity: (productId: string, variantId: string | null | undefined, quantity: number) => void;
   removeItem: (productId: string, variantId?: string | null) => void;
   clearCart: () => void;
@@ -145,7 +145,9 @@ export function CartProvider({
     }).catch(() => {});
   };
 
-  const addItem = (newItem: Omit<CartItem, 'quantity'> & { quantity?: number }) => {
+  const addItem = (
+    newItem: Omit<CartItem, 'quantity'> & { quantity?: number; openDrawer?: boolean }
+  ) => {
     const qty = newItem.quantity || 1;
     setItems((prevItems) => {
       const existingIndex = prevItems.findIndex(
@@ -185,7 +187,9 @@ export function CartProvider({
       });
     }
 
-    setIsOpen(true);
+    if (newItem.openDrawer !== false) {
+      setIsOpen(true);
+    }
   };
 
   const updateQuantity = (

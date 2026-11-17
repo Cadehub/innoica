@@ -18,12 +18,14 @@ export function sanitizeUrl(url?: string | null, fallback: string = '#'): string
 
   const lower = trimmed.toLowerCase();
 
-  // Rejet immédiat des schémas dangereux, URLs protocol-relative et caractères d'injection HTML
+  // Rejet immédiat des schémas dangereux, URLs protocol-relative (// ou /\), backslashes et caractères d'injection HTML
   if (
     lower.startsWith('javascript:') ||
     lower.startsWith('data:') ||
     lower.startsWith('vbscript:') ||
     trimmed.startsWith('//') ||
+    trimmed.includes('\\') ||
+    trimmed.startsWith('/\\') ||
     lower.includes('<') ||
     lower.includes('>') ||
     lower.includes('"') ||

@@ -33,6 +33,7 @@ export default async function StoreBuilderPage({ params }: StoreBuilderPageProps
       images,
       stock_quantity,
       track_stock,
+      has_variants,
       product_categories (name)
     `)
     .eq('workspace_id', ctx.workspace.id)
@@ -48,6 +49,7 @@ export default async function StoreBuilderPage({ params }: StoreBuilderPageProps
     images: Array.isArray(p.images) ? p.images : [],
     stock_quantity: p.stock_quantity ?? 0,
     track_stock: p.track_stock ?? true,
+    has_variants: p.has_variants ?? false,
     category_name: p.product_categories?.name || null,
   }));
 

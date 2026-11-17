@@ -114,7 +114,7 @@ export function CatalogClient({
       case 'popular':
       default:
         // featured first
-        list.sort((a, b) => (b.track_stock ? 1 : 0) - (a.track_stock ? 1 : 0));
+        list.sort((a, b) => (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0));
         break;
     }
 

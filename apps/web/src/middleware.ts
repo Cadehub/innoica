@@ -6,7 +6,7 @@
 import createMiddleware from 'next-intl/middleware';
 import { routing } from './i18n/routing';
 import { NextRequest, NextResponse } from 'next/server';
-import { RESERVED_STORE_SLUGS } from '@innoica/shared';
+import { RESERVED_STORE_SLUGS, slugRegex } from '@innoica/shared';
 
 const handleI18nRouting = createMiddleware(routing);
 
@@ -37,6 +37,18 @@ export function extractStoreSubdomain(req: NextRequest): string | null {
 
   const hostname = host.split(':')[0].toLowerCase();
 
+  // Rejeter toute tentative de traversée de chemin ou caractères illégaux dans l'en-tête Host
+  if (
+    !hostname ||
+    hostname.includes('..') ||
+    hostname.includes('/') ||
+    hostname.includes('\\') ||
+    hostname.includes('%') ||
+    /\s/.test(hostname)
+  ) {
+    return null;
+  }
+
   // Ignorer les adresses IP pures, localhost brut et previews Vercel
   if (
     /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname) ||
@@ -49,8 +61,14 @@ export function extractStoreSubdomain(req: NextRequest): string | null {
   // Support développement local : [slug].localhost
   if (hostname.endsWith('.localhost')) {
     const parts = hostname.split('.');
-    if (parts.length >= 2 && parts[0] && !RESERVED_STORE_SLUGS.has(parts[0])) {
-      return parts[0];
+    const candidate = parts[0];
+    if (
+      parts.length >= 2 &&
+      candidate &&
+      parts.slice(0, -1).every((p) => Boolean(p) && slugRegex.test(p)) &&
+      !RESERVED_STORE_SLUGS.has(candidate)
+    ) {
+      return candidate;
     }
     return null;
   }
@@ -58,10 +76,14 @@ export function extractStoreSubdomain(req: NextRequest): string | null {
   // Support production : [slug].[rootDomain]
   const rootDomain = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'innoica.com').toLowerCase();
   if (hostname.endsWith(`.${rootDomain}`)) {
-    const withoutRoot = hostname.replace(`.${rootDomain}`, '');
+    const withoutRoot = hostname.slice(0, -(`.${rootDomain}`.length));
     const parts = withoutRoot.split('.');
     const potentialSlug = parts[parts.length - 1];
-    if (potentialSlug && !RESERVED_STORE_SLUGS.has(potentialSlug)) {
+    if (
+      potentialSlug &&
+      parts.every((p) => Boolean(p) && slugRegex.test(p)) &&
+      !RESERVED_STORE_SLUGS.has(potentialSlug)
+    ) {
       return potentialSlug;
     }
   }

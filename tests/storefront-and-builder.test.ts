@@ -4,10 +4,12 @@
 // ====================================================================
 
 import { describe, it, expect } from 'vitest';
+import crypto from 'node:crypto';
 import {
   RESERVED_STORE_SLUGS,
   isReservedStoreSlug,
   storeSettingsSchema,
+  productSchema,
   storeLayoutSchema,
   cameroonPhoneRegex,
   createStoreOrderPayloadSchema,
@@ -127,8 +129,47 @@ describe('Milestone 4: Public Storefront & Visual Store Builder Suite', () => {
       expect(sanitizeUrl('//evil.com/phishing')).toBe('#');
       expect(sanitizeUrl('https://evil.com/<script>')).toBe('#');
       expect(sanitizeUrl('https://evil.com/"onload="alert(1)')).toBe('#');
+      expect(sanitizeUrl('/\\evil.com')).toBe('#');
+      expect(sanitizeUrl('/\\evil.com/phishing')).toBe('#');
+      expect(sanitizeUrl('foo\\bar')).toBe('#');
       expect(sanitizeUrl(null)).toBe('#');
       expect(sanitizeUrl('')).toBe('#');
+    });
+
+    it('rejects javascript: and data: URLs in storeSettingsSchema and productSchema', () => {
+      const badStoreLogo = storeSettingsSchema.safeParse({
+        workspaceId: '11111111-1111-1111-1111-111111111111',
+        storeSlug: 'boutique-yaounde',
+        storeName: 'Boutique Yaoundé',
+        logoUrl: 'javascript:alert(1)',
+      });
+      expect(badStoreLogo.success).toBe(false);
+
+      const badStoreBanner = storeSettingsSchema.safeParse({
+        workspaceId: '11111111-1111-1111-1111-111111111111',
+        storeSlug: 'boutique-yaounde',
+        storeName: 'Boutique Yaoundé',
+        bannerUrl: 'data:text/html,<script>alert(1)</script>',
+      });
+      expect(badStoreBanner.success).toBe(false);
+
+      const badProductImg = productSchema.safeParse({
+        workspaceId: '11111111-1111-1111-1111-111111111111',
+        title: 'FreePods 4',
+        slug: 'freepods-4',
+        basePriceXaf: 18500,
+        images: ['javascript:alert(1)'],
+      });
+      expect(badProductImg.success).toBe(false);
+
+      const validStoreMedia = storeSettingsSchema.safeParse({
+        workspaceId: '11111111-1111-1111-1111-111111111111',
+        storeSlug: 'boutique-yaounde',
+        storeName: 'Boutique Yaoundé',
+        logoUrl: 'https://cdn.innoica.com/logo.png',
+        bannerUrl: 'http://cdn.innoica.com/banner.jpg',
+      });
+      expect(validStoreMedia.success).toBe(true);
     });
 
     it('strips HTML tags and script elements in text sanitization', () => {
@@ -254,6 +295,59 @@ describe('Milestone 4: Public Storefront & Visual Store Builder Suite', () => {
         expect(res.error.issues.some((i) => i.path.includes('deliveryAddress'))).toBe(true);
       }
     });
+
+    it('rejects delivery + pickup payment combination and requires Mobile Money ref/phone', () => {
+      const deliveryWithPickupPayment = {
+        storeSlug: 'oraimo-douala',
+        customerName: 'Marc Nkoa',
+        customerPhone: '+237699123456',
+        deliveryMethod: 'delivery' as const,
+        deliveryAddress: 'Douala Akwa',
+        paymentMethod: 'pickup' as const,
+        items: [{ productId: '22222222-2222-2222-2222-222222222222', quantity: 1 }],
+      };
+      const resPickup = createStoreOrderPayloadSchema.safeParse(deliveryWithPickupPayment);
+      expect(resPickup.success).toBe(false);
+      if (!resPickup.success) {
+        expect(
+          resPickup.error.issues.some((i) =>
+            i.message.includes("paiement au retrait n'est pas disponible")
+          )
+        ).toBe(true);
+      }
+
+      const momoMissingFields = {
+        storeSlug: 'oraimo-douala',
+        customerName: 'Marc Nkoa',
+        customerPhone: '+237699123456',
+        deliveryMethod: 'delivery' as const,
+        deliveryAddress: 'Douala Akwa',
+        paymentMethod: 'manual_mobile_money' as const,
+        manualPaymentRef: null,
+        manualPaymentPhone: null,
+        items: [{ productId: '22222222-2222-2222-2222-222222222222', quantity: 1 }],
+      };
+      const resMomoMissing = createStoreOrderPayloadSchema.safeParse(momoMissingFields);
+      expect(resMomoMissing.success).toBe(false);
+      if (!resMomoMissing.success) {
+        expect(resMomoMissing.error.issues.some((i) => i.path.includes('manualPaymentRef'))).toBe(true);
+        expect(resMomoMissing.error.issues.some((i) => i.path.includes('manualPaymentPhone'))).toBe(true);
+      }
+
+      const momoInvalidPhone = {
+        ...momoMissingFields,
+        manualPaymentRef: 'MP261117.1234',
+        manualPaymentPhone: '+33612345678',
+      };
+      expect(createStoreOrderPayloadSchema.safeParse(momoInvalidPhone).success).toBe(false);
+
+      const momoValid = {
+        ...momoMissingFields,
+        manualPaymentRef: 'MP261117.1234',
+        manualPaymentPhone: '699001122',
+      };
+      expect(createStoreOrderPayloadSchema.safeParse(momoValid).success).toBe(true);
+    });
   });
 
   // ------------------------------------------------------------------
@@ -330,6 +424,26 @@ describe('Milestone 4: Public Storefront & Visual Store Builder Suite', () => {
       expect(extractStoreSubdomain(createMockReq('127.0.0.1:3000'))).toBeNull();
       expect(extractStoreSubdomain(createMockReq('preview.vercel.app'))).toBeNull();
     });
+
+    it('blocks path traversal and malformed x-forwarded-host values in extractStoreSubdomain', () => {
+      const createXfhReq = (xfh: string): NextRequest => {
+        return {
+          headers: new Headers({
+            host: 'boutique.innoica.com',
+            'x-forwarded-host': xfh,
+          }),
+          nextUrl: new URL('https://boutique.innoica.com/'),
+        } as unknown as NextRequest;
+      };
+
+      expect(extractStoreSubdomain(createXfhReq('%2e%2e/%2e%2e/admin.innoica.com'))).toBeNull();
+      expect(extractStoreSubdomain(createXfhReq('%2e%2e/%2e%2e/admin.localhost'))).toBeNull();
+      expect(extractStoreSubdomain(createXfhReq('a/../admin.innoica.com'))).toBeNull();
+      expect(extractStoreSubdomain(createXfhReq('a/../.boutique.innoica.com'))).toBeNull();
+      expect(extractStoreSubdomain(createXfhReq('bad..slug.innoica.com'))).toBeNull();
+      expect(extractStoreSubdomain(createXfhReq('evil_slug.localhost'))).toBeNull();
+      expect(extractStoreSubdomain(createXfhReq('valid-shop.innoica.com'))).toBe('valid-shop');
+    });
   });
 
   // ------------------------------------------------------------------
@@ -399,6 +513,59 @@ describe('Milestone 4: Public Storefront & Visual Store Builder Suite', () => {
       // Tampered signature must fail
       const tampered = `${token.slice(0, -3)}xxx`;
       expect(verifyOrderReceipt(tampered, 'oraimo-douala', 'CMD-20261117-0001')).toBeNull();
+    });
+
+    it('hardens order receipt issuedAt validation and rejects public anon key / missing production secret', () => {
+      const origEnv = { ...process.env };
+      try {
+        process.env.ORDER_RECEIPT_SECRET = 'server-only-test-secret';
+
+        // Missing or NaN or future-skewed issuedAt must be rejected even if validly signed
+        const signRaw = (payloadObj: any, secret: string) => {
+          const payload = Buffer.from(JSON.stringify(payloadObj), 'utf8').toString('base64url');
+          const sig = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+          return `${payload}.${sig}`;
+        };
+
+        const missingIssuedAt = signRaw(
+          { storeSlug: 'oraimo-douala', orderNumber: 'CMD-20261117-0001' },
+          'server-only-test-secret'
+        );
+        expect(verifyOrderReceipt(missingIssuedAt, 'oraimo-douala', 'CMD-20261117-0001')).toBeNull();
+
+        const futureIssuedAt = signRaw(
+          {
+            storeSlug: 'oraimo-douala',
+            orderNumber: 'CMD-20261117-0001',
+            issuedAt: Date.now() + 5 * 60 * 1000,
+          },
+          'server-only-test-secret'
+        );
+        expect(verifyOrderReceipt(futureIssuedAt, 'oraimo-douala', 'CMD-20261117-0001')).toBeNull();
+
+        // Token signed with NEXT_PUBLIC_SUPABASE_ANON_KEY must NOT be accepted
+        delete process.env.ORDER_RECEIPT_SECRET;
+        delete process.env.ENCRYPTION_MASTER_KEY;
+        delete process.env.WORKER_INTERNAL_SECRET;
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'public-anon-key';
+        const forgedWithAnon = signRaw(
+          {
+            storeSlug: 'oraimo-douala',
+            orderNumber: 'CMD-20261117-0001',
+            issuedAt: Date.now(),
+          },
+          'public-anon-key'
+        );
+        expect(verifyOrderReceipt(forgedWithAnon, 'oraimo-douala', 'CMD-20261117-0001')).toBeNull();
+
+        // Production without server secret must throw
+        (process.env as any).NODE_ENV = 'production';
+        expect(() =>
+          verifyOrderReceipt(forgedWithAnon, 'oraimo-douala', 'CMD-20261117-0001')
+        ).toThrow();
+      } finally {
+        process.env = origEnv;
+      }
     });
   });
 });

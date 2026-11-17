@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { hexColorRegex } from '@innoica/shared';
 import { Check } from 'lucide-react';
 
@@ -23,6 +23,11 @@ interface ColorPalettePickerProps {
 export function ColorPalettePicker({ color, onChange }: ColorPalettePickerProps) {
   const [customInput, setCustomInput] = useState(color);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCustomInput(color);
+    setError(null);
+  }, [color]);
 
   const handleCustomChange = (val: string) => {
     let clean = val.trim();

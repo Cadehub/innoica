@@ -64,23 +64,32 @@ export function ProductDetailsClient({
   themeColor = '#25D366',
 }: ProductDetailsClientProps) {
   const router = useRouter();
-  const { addItem } = useCart();
+  const { addItem, closeCart } = useCart();
 
   // Active image
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
-  // Active variant
+  // Active variant (auto-select first in-stock variant if available)
   const activeVariants = (product.variants || []).filter((v) => v.is_active);
+  const firstInStockVariant =
+    activeVariants.find((v) => {
+      const vTrackStock = v.track_stock ?? product.track_stock;
+      return !vTrackStock || v.stock_quantity > 0;
+    }) || activeVariants[0] || null;
+
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
-    activeVariants.length > 0 ? activeVariants[0].id : null
+    firstInStockVariant ? firstInStockVariant.id : null
   );
 
   const selectedVariant = activeVariants.find((v) => v.id === selectedVariantId) || null;
 
-  // Active pricing & stock
+  // Active pricing & stock (respect variant-level track_stock)
   const currentPrice = selectedVariant ? selectedVariant.price_xaf : product.base_price_xaf;
   const currentStock = selectedVariant ? selectedVariant.stock_quantity : product.stock_quantity;
-  const isOutOfStock = product.track_stock && currentStock <= 0;
+  const currentTrackStock = selectedVariant
+    ? (selectedVariant.track_stock ?? product.track_stock)
+    : product.track_stock;
+  const isOutOfStock = currentTrackStock && currentStock <= 0;
 
   // Quantity stepper
   const [quantity, setQuantity] = useState(1);
@@ -94,7 +103,7 @@ export function ProductDetailsClient({
       ? Math.round(((product.compare_at_price_xaf - currentPrice) / product.compare_at_price_xaf) * 100)
       : null;
 
-  const handleAddToCart = () => {
+  const handleAddToCart = (openDrawer: boolean = true) => {
     if (isOutOfStock) return;
 
     addItem({
@@ -107,6 +116,7 @@ export function ProductDetailsClient({
       image: currentImage || undefined,
       stockQuantity: currentStock,
       quantity,
+      openDrawer,
     });
 
     setAdded(true);
@@ -114,7 +124,9 @@ export function ProductDetailsClient({
   };
 
   const handleBuyNow = () => {
-    handleAddToCart();
+    if (isOutOfStock) return;
+    handleAddToCart(false);
+    closeCart();
     router.push(`/store/${storeSlug}/checkout`);
   };
 
@@ -227,7 +239,7 @@ export function ProductDetailsClient({
               )}
             </div>
 
-            <StockBadge quantity={currentStock} trackStock={product.track_stock} />
+            <StockBadge quantity={currentStock} trackStock={currentTrackStock} />
           </div>
 
           {/* Variants Selector */}
@@ -239,7 +251,8 @@ export function ProductDetailsClient({
               <div className="flex flex-wrap gap-2">
                 {activeVariants.map((v) => {
                   const isSelected = selectedVariantId === v.id;
-                  const variantOutOfStock = v.track_stock && v.stock_quantity <= 0;
+                  const variantTrackStock = v.track_stock ?? product.track_stock;
+                  const variantOutOfStock = variantTrackStock && v.stock_quantity <= 0;
 
                   return (
                     <button
@@ -285,8 +298,12 @@ export function ProductDetailsClient({
                 </span>
                 <button
                   type="button"
-                  onClick={() => setQuantity((q) => (currentStock > 0 ? Math.min(currentStock, q + 1) : q + 1))}
-                  disabled={isOutOfStock || (currentStock > 0 && quantity >= currentStock)}
+                  onClick={() =>
+                    setQuantity((q) =>
+                      currentTrackStock && currentStock > 0 ? Math.min(currentStock, q + 1) : q + 1
+                    )
+                  }
+                  disabled={isOutOfStock || (currentTrackStock && currentStock > 0 && quantity >= currentStock)}
                   className="h-9 w-9 rounded-lg flex items-center justify-center text-zinc-600 hover:bg-zinc-100 disabled:opacity-30 cursor-pointer"
                   aria-label="Augmenter"
                 >
@@ -297,7 +314,7 @@ export function ProductDetailsClient({
               {/* Add to Cart Button */}
               <button
                 type="button"
-                onClick={handleAddToCart}
+                onClick={() => handleAddToCart(true)}
                 disabled={isOutOfStock}
                 className={`flex-1 py-3 px-5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-md transition-all ${
                   isOutOfStock

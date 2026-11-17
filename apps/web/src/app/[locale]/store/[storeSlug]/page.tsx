@@ -50,6 +50,7 @@ export default async function StoreHomePage({ params }: StoreHomePageProps) {
       images,
       stock_quantity,
       track_stock,
+      has_variants,
       is_featured,
       category_id,
       product_categories (name)
@@ -68,6 +69,7 @@ export default async function StoreHomePage({ params }: StoreHomePageProps) {
     images: Array.isArray(p.images) ? p.images : [],
     stock_quantity: p.stock_quantity ?? 0,
     track_stock: p.track_stock ?? true,
+    has_variants: p.has_variants ?? false,
     category_name: p.product_categories?.name || null,
     is_featured: p.is_featured ?? false,
   }));

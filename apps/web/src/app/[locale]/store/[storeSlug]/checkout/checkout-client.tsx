@@ -88,8 +88,9 @@ export function CheckoutClient({
     }
 
     if (paymentMethod === 'manual_mobile_money') {
-      if (!manualPaymentPhone.trim() || manualPaymentPhone.trim().length < 6) {
-        return 'Veuillez indiquer le numéro de téléphone utilisé pour le transfert Mobile Money.';
+      const cleanManualPhone = manualPaymentPhone.replace(/[\s.-]/g, '').trim();
+      if (!cameroonPhoneRegex.test(cleanManualPhone)) {
+        return 'Veuillez indiquer un numéro Mobile Money camerounais valide (ex: +237 6XXXXXXXX ou 6XXXXXXXX).';
       }
       if (!manualPaymentRef.trim() || manualPaymentRef.trim().length < 3) {
         return 'Veuillez indiquer l’ID de transaction ou la référence du transfert reçu par SMS.';
@@ -128,7 +129,9 @@ export function CheckoutClient({
         deliveryNotes: deliveryNotes.trim() || null,
         paymentMethod,
         manualPaymentPhone:
-          paymentMethod === 'manual_mobile_money' ? manualPaymentPhone.trim() : null,
+          paymentMethod === 'manual_mobile_money'
+            ? manualPaymentPhone.replace(/[\s.-]/g, '').trim()
+            : null,
         manualPaymentRef:
           paymentMethod === 'manual_mobile_money' ? manualPaymentRef.trim() : null,
         cartToken: cartToken || null,
