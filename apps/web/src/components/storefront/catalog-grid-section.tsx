@@ -60,7 +60,7 @@ export function CatalogGridSection({
   }, [products, selectedCategory, searchQuery, itemsLimit]);
 
   return (
-    <section className="px-3 sm:px-4 md:px-6 my-8 max-w-7xl mx-auto" id="catalog">
+    <section className="px-4 sm:px-6 lg:px-8 2xl:px-12 my-8 max-w-7xl 2xl:max-w-(--breakpoint-2xl) mx-auto" id="catalog">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 mb-6">
         <div>

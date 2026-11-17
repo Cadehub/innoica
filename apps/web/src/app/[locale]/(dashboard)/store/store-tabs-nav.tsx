@@ -85,7 +85,7 @@ export function StoreTabsNav({
         </div>
 
         {/* Tabs Bar */}
-        <nav className="flex items-center gap-1 pt-2">
+        <nav className="flex items-center gap-1.5 pt-2 overflow-x-auto pb-1 max-w-full studio-scroll">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isTabActive = tab.exact

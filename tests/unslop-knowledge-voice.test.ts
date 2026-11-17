@@ -56,8 +56,8 @@ describe('Unslop & Knowledge & Voice E2E Integration Suite', () => {
     expect(html).not.toContain('card-3d-tilt');
     expect(html).not.toContain('perspective-3d');
     expect(html).not.toContain('animate-float-slow');
-    // Verify voice note showcase
+    // Verify voice note showcase and new pricing
     expect(html).toContain('Message Vocal');
-    expect(html).toContain('5 000 FCFA');
+    expect(html).toContain('3 500 FCFA');
   });
 });

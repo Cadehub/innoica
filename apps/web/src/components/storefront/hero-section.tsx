@@ -34,7 +34,7 @@ export function HeroSection({
   const imageUrl = sanitizeUrl(settings.imageUrl || '', '');
 
   return (
-    <section className="relative overflow-hidden bg-zinc-950 text-white rounded-2xl md:rounded-3xl mx-3 sm:mx-4 md:mx-6 my-4 shadow-xl border border-zinc-800">
+    <section className="relative overflow-hidden bg-zinc-950 text-white rounded-2xl md:rounded-3xl mx-4 sm:mx-6 lg:mx-8 2xl:mx-auto max-w-7xl 2xl:max-w-(--breakpoint-2xl) my-4 sm:my-6 shadow-xl border border-zinc-800">
       {/* Dynamic background glow based on themeColor */}
       <div
         aria-hidden="true"

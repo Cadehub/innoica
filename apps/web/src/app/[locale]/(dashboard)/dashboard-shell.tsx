@@ -345,7 +345,7 @@ export function DashboardShell({
         {isInboxRoute ? (
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">{children}</div>
         ) : (
-          <div className="px-4 py-5 sm:px-6 sm:py-6 lg:p-8 max-w-7xl mx-auto w-full">
+          <div className="px-4 py-5 sm:px-6 sm:py-6 lg:p-8 max-w-7xl 2xl:max-w-(--breakpoint-2xl) mx-auto w-full">
             {children}
           </div>
         )}

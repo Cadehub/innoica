@@ -33,7 +33,7 @@ export function StoreHeader({
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-zinc-200/80 shadow-2xs antialiased">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <div className="max-w-7xl 2xl:max-w-(--breakpoint-2xl) mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 h-16 flex items-center justify-between gap-4">
         {/* Left: Mobile Menu Toggle & Brand */}
         <div className="flex items-center gap-3 min-w-0">
           <button

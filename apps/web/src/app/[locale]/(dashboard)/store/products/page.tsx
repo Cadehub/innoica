@@ -10,7 +10,7 @@ export default async function StoreProductsPage() {
 
   const { data: products } = await supabase
     .from('products')
-    .select('id, title, slug, description, base_price_xaf, stock_quantity, track_stock, is_active, is_featured, images')
+    .select('id, title, slug, description, base_price_xaf, stock_quantity, track_stock, has_variants, is_active, is_featured, images, product_variants(*)')
     .eq('workspace_id', ctx.workspace.id)
     .order('created_at', { ascending: false })
     .limit(300);

@@ -95,6 +95,11 @@ export function ProductCard({
                 -{discountPercent}%
               </span>
             )}
+            {product.has_variants && (
+              <span className="rounded-lg px-2 py-0.5 text-[10px] font-semibold bg-zinc-900/80 text-white backdrop-blur-xs">
+                Options
+              </span>
+            )}
           </div>
 
           <div className="absolute bottom-2 left-2.5 z-10">
@@ -120,7 +125,7 @@ export function ProductCard({
           {/* Price Block */}
           <div className="pt-1 flex items-baseline gap-2 flex-wrap">
             <span className="text-sm sm:text-base font-black text-zinc-950">
-              {formatPriceXaf(product.base_price_xaf)}
+              {product.has_variants ? `Dès ${formatPriceXaf(product.base_price_xaf)}` : formatPriceXaf(product.base_price_xaf)}
             </span>
             {product.compare_at_price_xaf &&
               product.compare_at_price_xaf > product.base_price_xaf && (
