@@ -47,7 +47,10 @@ REQUIRED_CACHE_MODS = (
 
 def load_local_env() -> None:
     """Load root .env.local or .env variables if not already present in os.environ."""
-    repo_root = Path(__file__).resolve().parents[2]
+    try:
+        repo_root = Path(__file__).resolve().parents[2]
+    except IndexError:
+        repo_root = Path(__file__).resolve().parent
     for env_name in (".env.local", ".env"):
         env_path = repo_root / env_name
         if not env_path.is_file():

@@ -9,7 +9,7 @@ from __future__ import annotations
 try:
     import bootstrap_env
     bootstrap_env.bootstrap()
-except ImportError:
+except Exception:
     pass
 
 import asyncio
