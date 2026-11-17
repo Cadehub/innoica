@@ -43,7 +43,7 @@ services:
     container_name: innoica-whatsapp-worker
     restart: unless-stopped
     ports:
-      - "4001:4001"
+      - "127.0.0.1:4001:4001"
     environment:
       - NODE_ENV=production
       - PORT=4001
@@ -73,7 +73,7 @@ services:
     container_name: innoica-ai-runtime
     restart: unless-stopped
     ports:
-      - "4002:4002"
+      - "127.0.0.1:4002:4002"
     environment:
       - NODE_ENV=production
       - PORT=4002
@@ -101,7 +101,7 @@ services:
     container_name: innoica-speech-worker
     restart: unless-stopped
     ports:
-      - "4004:4004"
+      - "127.0.0.1:4004:4004"
     environment:
       - SPEECH_WORKER_PORT=4004
       - WORKER_INTERNAL_SECRET=${WORKER_INTERNAL_SECRET}
@@ -122,7 +122,7 @@ services:
     container_name: innoica-ingestion-worker
     restart: unless-stopped
     ports:
-      - "4003:4003"
+      - "127.0.0.1:4003:4003"
     environment:
       - NODE_ENV=production
       - PORT=4003

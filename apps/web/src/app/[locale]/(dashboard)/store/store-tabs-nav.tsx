@@ -11,6 +11,8 @@ import {
   Store,
   CheckCircle2,
   XCircle,
+  ShoppingBag,
+  Package,
 } from 'lucide-react';
 
 interface StoreTabsNavProps {
@@ -34,6 +36,16 @@ export function StoreTabsNav({
       label: locale === 'en' ? 'Overview' : "Vue d'ensemble",
       icon: LayoutDashboard,
       exact: true,
+    },
+    {
+      href: '/store/orders',
+      label: locale === 'en' ? 'Orders' : 'Commandes',
+      icon: ShoppingBag,
+    },
+    {
+      href: '/store/products',
+      label: locale === 'en' ? 'Products' : 'Produits',
+      icon: Package,
     },
     {
       href: '/store/builder',

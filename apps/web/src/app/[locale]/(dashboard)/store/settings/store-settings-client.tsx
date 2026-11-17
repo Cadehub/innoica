@@ -22,6 +22,8 @@ interface StoreSettingsClientProps {
     banner_url?: string | null;
     currency: string;
     is_active: boolean;
+    notification_phone?: string | null;
+    notify_on_new_order?: boolean;
   };
   locale: 'fr' | 'en';
 }
@@ -39,6 +41,8 @@ export function StoreSettingsClient({
   const [bannerUrl, setBannerUrl] = useState(initialStore.banner_url || '');
   const [currency, setCurrency] = useState(initialStore.currency || 'XAF');
   const [isActive, setIsActive] = useState(initialStore.is_active);
+  const [notificationPhone, setNotificationPhone] = useState(initialStore.notification_phone || '');
+  const [notifyOnNewOrder, setNotifyOnNewOrder] = useState(initialStore.notify_on_new_order ?? true);
 
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -92,6 +96,8 @@ export function StoreSettingsClient({
           bannerUrl: bannerUrl.trim() || null,
           currency,
           isActive,
+          notificationPhone: notificationPhone.trim() || null,
+          notifyOnNewOrder,
         }),
       });
 
@@ -223,6 +229,35 @@ export function StoreSettingsClient({
               <option value="XAF">Franc CFA (XAF / FCFA) — Cameroun</option>
             </select>
           </div>
+        </div>
+
+        {/* Merchant WhatsApp order notifications */}
+        <div className="p-5 rounded-2xl bg-white border border-zinc-200/80 shadow-2xs space-y-3">
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-zinc-800">
+              Numéro WhatsApp pour les alertes de commande
+            </label>
+            <input
+              type="tel"
+              inputMode="tel"
+              value={notificationPhone}
+              onChange={(e) => setNotificationPhone(e.target.value)}
+              placeholder="+237690000000"
+              className="w-full px-3.5 py-2 text-xs rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+            />
+            <p className="text-[10px] text-zinc-400">
+              Vous recevrez un message WhatsApp à chaque nouvelle commande, envoyé par votre agent connecté.
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-zinc-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={notifyOnNewOrder}
+              onChange={(e) => setNotifyOnNewOrder(e.target.checked)}
+              className="h-4 w-4 rounded border-zinc-300"
+            />
+            Activer les notifications de nouvelle commande
+          </label>
         </div>
 
         {/* Store Active Toggle */}

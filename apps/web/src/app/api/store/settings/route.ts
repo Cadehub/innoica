@@ -81,6 +81,24 @@ export async function PUT(request: NextRequest) {
     const cleanLogoUrl = logoUrl && String(logoUrl).trim() ? sanitizeUrl(String(logoUrl), '') || null : null;
     const cleanBannerUrl = bannerUrl && String(bannerUrl).trim() ? sanitizeUrl(String(bannerUrl), '') || null : null;
 
+    // Milestone 5 — merchant WhatsApp notification number (optional)
+    const hasNotifPhone = Object.prototype.hasOwnProperty.call(body, 'notificationPhone');
+    let cleanNotifPhone: string | null = null;
+    if (hasNotifPhone && body.notificationPhone) {
+      cleanNotifPhone = String(body.notificationPhone).replace(/[\s.()-]/g, '').trim();
+      if (!/^\+?[0-9]{8,15}$/.test(cleanNotifPhone)) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Numéro de notification invalide (format international, ex: +237690000000)',
+          },
+          { status: 400 }
+        );
+      }
+    }
+    const notifyOnNewOrder =
+      typeof body.notifyOnNewOrder === 'boolean' ? body.notifyOnNewOrder : undefined;
+
     // Upsert store_settings for this workspace
     const { data: updated, error } = await supabase
       .from('store_settings')
@@ -94,6 +112,8 @@ export async function PUT(request: NextRequest) {
           banner_url: cleanBannerUrl,
           currency: currency || 'XAF',
           is_active: typeof isActive === 'boolean' ? isActive : true,
+          ...(hasNotifPhone ? { notification_phone: cleanNotifPhone } : {}),
+          ...(notifyOnNewOrder !== undefined ? { notify_on_new_order: notifyOnNewOrder } : {}),
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'workspace_id' }

@@ -17,7 +17,7 @@ export default async function StoreSettingsPage({ params }: StoreSettingsPagePro
 
   const { data: store } = await supabase
     .from('store_settings')
-    .select('store_name, store_slug, description, logo_url, banner_url, currency, is_active')
+    .select('store_name, store_slug, description, logo_url, banner_url, currency, is_active, notification_phone, notify_on_new_order')
     .eq('workspace_id', ctx.workspace.id)
     .maybeSingle();
 
@@ -38,6 +38,8 @@ export default async function StoreSettingsPage({ params }: StoreSettingsPagePro
     banner_url: null,
     currency: 'XAF',
     is_active: true,
+    notification_phone: null,
+    notify_on_new_order: true,
   };
 
   return (

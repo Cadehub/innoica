@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getActiveWorkspaceContext } from '@/lib/workspace';
 import { redirect } from '@/i18n/routing';
 import { AdminConsoleClient } from './admin-client';
+import { CommerceMetricsCard, type CommerceMetrics } from '@/components/admin-commerce-metrics';
 
 export default async function SuperAdminPage({
   params,
@@ -62,17 +63,22 @@ export default async function SuperAdminPage({
         .limit(30),
     ]);
 
+  const { data: commerceMetrics } = await supabase.rpc('admin_get_commerce_metrics');
+
   return (
-    <AdminConsoleClient
-      initialPlans={plansRes.data || []}
-      initialDeclarations={declarationsRes.data || []}
-      initialWorkspaces={workspacesRes.data || []}
-      initialAgents={agentsRes.data || []}
-      initialSettings={settingsRes.data || null}
-      initialLogs={logsRes.data || []}
-      initialVoiceJobs={voiceJobsRes.data || []}
-      speechWorkerHealth={speechHealth}
-      totalUsers={statsRes.count || 0}
-    />
+    <>
+      <CommerceMetricsCard metrics={(commerceMetrics as CommerceMetrics) || null} />
+      <AdminConsoleClient
+        initialPlans={plansRes.data || []}
+        initialDeclarations={declarationsRes.data || []}
+        initialWorkspaces={workspacesRes.data || []}
+        initialAgents={agentsRes.data || []}
+        initialSettings={settingsRes.data || null}
+        initialLogs={logsRes.data || []}
+        initialVoiceJobs={voiceJobsRes.data || []}
+        speechWorkerHealth={speechHealth}
+        totalUsers={statsRes.count || 0}
+      />
+    </>
   );
 }

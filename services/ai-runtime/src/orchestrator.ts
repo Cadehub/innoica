@@ -18,6 +18,7 @@ import {
 } from '@innoica/shared';
 import { decryptSecret } from '@innoica/shared/server';
 import { dispatchLLMCall, LLMContentPart, LLMMessage } from './adapters/index.js';
+import { buildCatalogContextBlock, CatalogContextPayload } from './catalog-context.js';
 import {
   buildVoiceSystemDirectives,
   decideVoicePreLlmAction,
@@ -396,12 +397,29 @@ export class AIOrchestrator {
         language: activeLanguage === 'en' ? 'en' : 'fr',
       });
 
+      // Milestone 5 — live native catalog (Commerce plan only, failures are non-fatal)
+      let catalogContext = '';
+      try {
+        const { data: catalogPayload } = await this.supabase.rpc('worker_get_catalog_context', {
+          p_workspace_id: agent.workspace_id,
+          p_query: incomingMessage || null,
+          p_limit: 25,
+          p_worker_secret: workerSecret,
+        });
+        catalogContext = buildCatalogContextBlock(
+          catalogPayload as CatalogContextPayload,
+          process.env.NEXT_PUBLIC_APP_URL || undefined
+        );
+      } catch (catalogErr: any) {
+        console.warn('[AI-Runtime] Catalogue indisponible (ignoré):', catalogErr?.message);
+      }
+
       const systemPromptContent = `${agent.system_prompt}
 
 Traits de personnalité : ${traits || 'Professionnel, courtois'}
 Langue détectée pour cet échange : ${activeLanguage === 'en' ? 'Anglais (English)' : 'Français'}
 ${memoryContext}
-${knowledgeContext}${voiceDirectives}${visionDirectives}
+${knowledgeContext}${catalogContext}${voiceDirectives}${visionDirectives}
 RÈGLES ET DIRECTIVES OPÉRATIONNELLES INVIOLABLES :
 1. RÈGLE LINGUISTIQUE STRICTE : Tu DOIS IMPÉRATIVEMENT répondre dans la langue exacte utilisée par le client (s'il écrit ou parle en français, réponds en français ; s'il s'exprime en anglais, réponds en anglais ; s'il emploie une autre langue ou un mélange, adapte-toi fidèlement et réponds dans sa langue).
 2. EXPLOITATION TOTALE DES CONNAISSANCES : Tu DOIS impérativement t'appuyer sur l'ensemble des connaissances fournies dans <connaissances_autorisees> (FAQ, fiches produits, documents TXT/PDF, sites web et liens d'entreprise). Réponds avec les informations réelles (services, tarifs, coordonnées, horaires). Si un lien web pertinent est indiqué dans les sources, fournis-le au client pour l'orienter.

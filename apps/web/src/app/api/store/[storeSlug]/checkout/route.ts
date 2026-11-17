@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { notifyMerchantOfOrder } from '@/lib/order-notifications';
 import { createStoreOrderPayloadSchema } from '@innoica/shared';
 import {
   ORDER_RECEIPT_COOKIE_NAME,
@@ -134,6 +135,11 @@ export async function POST(
       items: receiptItems,
       issuedAt: Date.now(),
     });
+
+    // Milestone 5: notify the merchant on WhatsApp after the response is sent (best-effort)
+    if (rpcResult?.orderId) {
+      after(() => notifyMerchantOfOrder(supabase, rpcResult.orderId));
+    }
 
     const res = NextResponse.json(
       {
