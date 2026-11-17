@@ -7,7 +7,7 @@ import { getActiveWorkspaceContext } from '@/lib/workspace';
 const setWorkspacePlanSchema = z.object({
   action: z.literal('set_workspace_plan'),
   workspaceId: z.string().uuid(),
-  planSlug: z.enum(['free', 'starter']),
+  planSlug: z.enum(['free', 'agent', 'commerce', 'starter']),
   billingCycle: z.enum(['monthly', 'yearly']).default('monthly'),
   durationDays: z.number().int().min(1).max(3660).default(30),
 });
@@ -48,7 +48,7 @@ export async function GET() {
 
   const [plansRes, declarationsRes, workspacesRes, agentsRes, settingsRes, logsRes, voiceJobsRes] =
     await Promise.all([
-      supabase.from('plans').select('*').in('slug', ['free', 'starter']).order('sort_order'),
+      supabase.from('plans').select('*').in('slug', ['free', 'agent', 'commerce', 'starter']).order('sort_order'),
       supabase
         .from('payment_declarations')
         .select('*, workspaces(name, slug), plans(slug, name_fr)')

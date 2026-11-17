@@ -11,8 +11,7 @@ export default async function SubscriptionPage() {
     supabase
       .from('plans')
       .select('*')
-      .eq('is_active', true)
-      .in('slug', ['free', 'starter'])
+      .in('slug', ['free', 'agent', 'commerce', 'starter'])
       .order('sort_order', { ascending: true }),
     supabase
       .from('payment_declarations')

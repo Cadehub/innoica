@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { formatPriceXaf } from '@/lib/utils';
 import { AutoGrowTextarea } from '@/components/auto-grow-textarea';
+import { PlanSlug } from '@innoica/shared';
 
 export function AdminConsoleClient({
   initialPlans,
@@ -206,7 +207,7 @@ export function AdminConsoleClient({
     }
   };
 
-  const handleSetWorkspacePlan = async (workspaceId: string, planSlug: 'free' | 'starter') => {
+  const handleSetWorkspacePlan = async (workspaceId: string, planSlug: PlanSlug) => {
     setBusyId(workspaceId);
     try {
       await callAdmin(
@@ -312,7 +313,7 @@ export function AdminConsoleClient({
       <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <h2 className="text-sm font-bold text-slate-900">
-            Déclarations de paiements Starter (Free -&gt; Starter)
+            Déclarations de paiements (Agent / Commerce / Starter)
           </h2>
           <input
             type="text"
@@ -380,7 +381,7 @@ export function AdminConsoleClient({
         <div className="flex items-center gap-2">
           <Sliders className="h-4 w-4 text-blue-600" />
           <h2 className="text-sm font-bold text-slate-900">
-            Configuration centralisée des plans Free & Starter
+            Configuration centralisée des plans (Free, Agent, Commerce & Starter)
           </h2>
         </div>
 
@@ -542,6 +543,31 @@ export function AdminConsoleClient({
                 />
                 <span>Compréhension vocale WhatsApp (`voice_message_understanding`)</span>
               </label>
+
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(
+                    plan.capabilities?.ecommerce_store ?? (plan.slug === 'commerce')
+                  )}
+                  onChange={(e) =>
+                    setPlans((prev) =>
+                      prev.map((p) =>
+                        p.slug === plan.slug
+                          ? {
+                              ...p,
+                              capabilities: {
+                                ...(p.capabilities || {}),
+                                ecommerce_store: e.target.checked,
+                              },
+                            }
+                          : p
+                      )
+                    )
+                  }
+                />
+                <span>Boutique & Moteur E-Commerce (`ecommerce_store`)</span>
+              </label>
             </div>
           ))}
         </div>
@@ -623,16 +649,19 @@ export function AdminConsoleClient({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
+                  <select
                     disabled={busyId === ws.id}
-                    onClick={() =>
-                      handleSetWorkspacePlan(ws.id, slug === 'starter' ? 'free' : 'starter')
+                    value={slug}
+                    onChange={(e) =>
+                      handleSetWorkspacePlan(ws.id, e.target.value as PlanSlug)
                     }
-                    className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 cursor-pointer"
+                    className="rounded-xl border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 cursor-pointer focus:outline-none"
                   >
-                    Passer sur {slug === 'starter' ? 'Free' : 'Starter'}
-                  </button>
+                    <option value="free">Free (0 FCFA)</option>
+                    <option value="agent">INNOICA Agent (3 500 FCFA)</option>
+                    <option value="commerce">INNOICA Commerce (6 500 FCFA)</option>
+                    <option value="starter">Starter (5 000 FCFA)</option>
+                  </select>
                   <button
                     type="button"
                     disabled={busyId === ws.id}

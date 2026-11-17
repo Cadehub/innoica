@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Link, useRouter } from '@/i18n/routing';
 import { AutoGrowTextarea } from '@/components/auto-grow-textarea';
+import { PlanSlug } from '@innoica/shared';
 import {
   ExternalLink,
   FileText,
@@ -18,7 +19,7 @@ import {
 interface KnowledgeClientProps {
   agents: Array<{ id: string; name: string }>;
   initialSources: any[];
-  planSlug: 'free' | 'starter';
+  planSlug: PlanSlug;
   allowedTypes: string[];
   maxDocs: number;
 }

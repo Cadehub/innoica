@@ -220,6 +220,7 @@ export const PLAN_CATALOG = {
     hasWatermark: true,
     capabilities: {
       voice_message_understanding: false,
+      ecommerce_store: false,
     },
     featuresFr: [
       '1 Agent IA WhatsApp',
@@ -242,6 +243,102 @@ export const PLAN_CATALOG = {
       '7-day conversation history',
       'Text messages only (voice messages require a paid plan)',
       'INNOICA signature on AI replies',
+    ],
+  },
+  agent: {
+    id: 'agent',
+    slug: 'agent',
+    nameFr: 'INNOICA Agent',
+    nameEn: 'INNOICA Agent',
+    descriptionFr: 'Agent IA WhatsApp complet avec compréhension vocale native et quotas illimités.',
+    descriptionEn: 'Full WhatsApp AI agent with native voice understanding and unlimited quotas.',
+    priceMonthly: 3500,
+    priceYearly: 37800,
+    annualFullPrice: 42000,
+    annualSavings: 4200,
+    annualDiscountPercent: 10,
+    currency: 'XAF',
+    maxAgents: 2,
+    maxConnections: 2,
+    maxDailyNewConversations: null as number | null,
+    maxDailyBotRepliesPerConv: null as number | null,
+    maxKnowledgeDocs: 25,
+    allowedKnowledgeTypes: ['faq', 'txt', 'pdf', 'url'] as const,
+    historyRetentionDays: null as number | null,
+    hasWatermark: false,
+    capabilities: {
+      voice_message_understanding: true,
+      ecommerce_store: false,
+    },
+    featuresFr: [
+      'Jusqu’à 2 Agents IA WhatsApp',
+      'Jusqu’à 2 Numéros WhatsApp connectés',
+      'Compréhension des messages vocaux (FR & EN) incluse sans frais',
+      'Conversations quotidiennes sans quota INNOICA',
+      'Réponses IA quotidiennes sans quota INNOICA',
+      'Connaissances complètes : FAQ, PDF, TXT & URL',
+      'Mémoire durable par contact & conversation',
+      'Inbox temps réel & Human Takeover',
+      'Historique étendu & journaux complets',
+      'Sans signature publicitaire INNOICA',
+    ],
+    featuresEn: [
+      'Up to 2 WhatsApp AI Agents',
+      'Up to 2 Connected WhatsApp numbers',
+      'Voice message understanding (FR & EN) included at no extra fee',
+      'No INNOICA daily conversation cap',
+      'No INNOICA daily AI reply cap',
+      'Full Knowledge Base: FAQ, PDF, TXT & URL',
+      'Durable contact & conversation memory',
+      'Real-time Inbox & Human Takeover',
+      'Extended history & supervision logs',
+      'No INNOICA promotional signature',
+    ],
+  },
+  commerce: {
+    id: 'commerce',
+    slug: 'commerce',
+    nameFr: 'INNOICA Commerce',
+    nameEn: 'INNOICA Commerce',
+    descriptionFr: 'Tout INNOICA Agent + Moteur E-Commerce Natif, Storefront, Catalogue & Commandes Baileys.',
+    descriptionEn: 'Everything in INNOICA Agent + Native E-Commerce Engine, Storefront, Catalog & Baileys Orders.',
+    priceMonthly: 6500,
+    priceYearly: 70200,
+    annualFullPrice: 78000,
+    annualSavings: 7800,
+    annualDiscountPercent: 10,
+    currency: 'XAF',
+    maxAgents: 3,
+    maxConnections: 3,
+    maxDailyNewConversations: null as number | null,
+    maxDailyBotRepliesPerConv: null as number | null,
+    maxKnowledgeDocs: 50,
+    allowedKnowledgeTypes: ['faq', 'txt', 'pdf', 'url'] as const,
+    historyRetentionDays: null as number | null,
+    hasWatermark: false,
+    capabilities: {
+      voice_message_understanding: true,
+      ecommerce_store: true,
+    },
+    featuresFr: [
+      'Tout le plan INNOICA Agent',
+      'Jusqu’à 3 Agents IA WhatsApp et 3 numéros connectés',
+      'Boutique en ligne native hébergée par INNOICA',
+      'Constructeur visuel sécurisé sans code',
+      'Catalogue produits, variantes & gestion des stocks',
+      'Paniers & commandes en temps réel',
+      'Paiements manuels (Livraison, Retrait, Mobile Money)',
+      'Synchronisation catalogue & commandes WhatsApp',
+    ],
+    featuresEn: [
+      'Everything in INNOICA Agent',
+      'Up to 3 WhatsApp AI Agents and 3 connected numbers',
+      'Native online storefront hosted by INNOICA',
+      'Secure no-code visual store builder',
+      'Product catalog, variants & inventory tracking',
+      'Real-time shopping carts & orders',
+      'Manual payments (COD, Pickup, Mobile Money)',
+      'Real-time catalog & order synchronization on WhatsApp',
     ],
   },
   starter: {
@@ -267,6 +364,7 @@ export const PLAN_CATALOG = {
     hasWatermark: false,
     capabilities: {
       voice_message_understanding: true,
+      ecommerce_store: false,
     },
     featuresFr: [
       'Jusqu’à 2 Agents IA WhatsApp',
@@ -346,6 +444,26 @@ export function resolveVoiceCapabilities(options: {
     return { voice_message_understanding: explicit };
   }
   return { voice_message_understanding: true };
+}
+
+export function resolveCommerceCapabilities(options: {
+  planSlug?: string | null;
+  capabilities?: Record<string, unknown> | null;
+  subscriptionStatus?: string | null;
+}): { ecommerce_store: boolean } {
+  const slug = (options.planSlug || 'free').toLowerCase();
+  if (slug === 'free') {
+    return { ecommerce_store: false };
+  }
+  const status = (options.subscriptionStatus || 'active').toLowerCase();
+  if (!['active', 'trialing'].includes(status)) {
+    return { ecommerce_store: false };
+  }
+  const explicit = options.capabilities?.ecommerce_store;
+  if (typeof explicit === 'boolean') {
+    return { ecommerce_store: explicit };
+  }
+  return { ecommerce_store: slug === 'commerce' };
 }
 
 export function getAfricaDoualaDateString(date: Date = new Date()): string {
@@ -435,3 +553,15 @@ export function sanitizeKnowledgeContent(input: string): string {
     .replace(/<\/?instructions>/gi, '[donnee]')
     .trim();
 }
+
+export const VISION_FALLBACK_MESSAGES = {
+  unsupported_model: {
+    fr: "Désolé, je ne peux pas analyser les images pour le moment car mon modèle d'intelligence artificielle actuel ne prend pas en charge la vision. Vous pouvez me poser votre question par texte ou par message vocal.",
+    en: "Sorry, I cannot analyze images at this time because my current AI model does not support vision. You can ask your question via text or voice message.",
+  },
+  corrupted_image: {
+    fr: "Désolé, impossible de charger votre image (fichier corrompu ou expiré). Veuillez renvoyer une photo nette.",
+    en: "Sorry, unable to load your image (corrupted or expired file). Please send a clear photo again.",
+  },
+} as const;
+

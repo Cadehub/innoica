@@ -91,6 +91,22 @@ export async function getActiveWorkspaceContext(
       account_status: 'active',
     },
     workspace: ws,
-    quota: quotaData && !quotaData.error ? (quotaData as WorkspaceQuotaSnapshot) : null,
+    quota:
+      quotaData && !quotaData.error
+        ? ({
+            ...quotaData,
+            capabilities: {
+              voice_message_understanding: Boolean(
+                quotaData.capabilities?.voice_message_understanding ??
+                  (quotaData.planSlug !== 'free')
+              ),
+              ecommerce_store: Boolean(
+                quotaData.capabilities?.ecommerce_store ??
+                  (quotaData.planSlug === 'commerce')
+              ),
+              ...(quotaData.capabilities || {}),
+            },
+          } as WorkspaceQuotaSnapshot)
+        : null,
   };
 }

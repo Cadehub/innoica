@@ -13,25 +13,63 @@ import {
 } from '../packages/shared/src/server';
 
 describe('Innoica Agent Studio v2.1 — Business Rules, PDF & SSRF Security', () => {
-  it('enforces exact launch pricing math (5 000 FCFA/mo, 54 000 FCFA/yr = 10% off 60 000 FCFA)', () => {
-    const monthly = PLAN_CATALOG.starter.priceMonthly;
-    const yearly = PLAN_CATALOG.starter.priceYearly;
-    const undiscounted = monthly * 12;
-    const savings = undiscounted - yearly;
+  it('enforces exact commercial pricing math (INNOICA Agent 3 500 FCFA & INNOICA Commerce 6 500 FCFA with 10% annual discounts)', () => {
+    // INNOICA Agent (3 500 FCFA/mo, 37 800 FCFA/yr)
+    const agentMonthly = PLAN_CATALOG.agent.priceMonthly;
+    const agentYearly = PLAN_CATALOG.agent.priceYearly;
+    const agentUndiscounted = agentMonthly * 12; // 42000
+    const agentSavings = agentUndiscounted - agentYearly; // 4200
+    expect(agentMonthly).toBe(3500);
+    expect(agentYearly).toBe(37800);
+    expect(agentUndiscounted).toBe(42000);
+    expect(agentSavings).toBe(4200);
+    expect(Math.round((agentSavings / agentUndiscounted) * 100)).toBe(10);
+    expect(PLAN_CATALOG.agent.capabilities.voice_message_understanding).toBe(true);
+    expect(PLAN_CATALOG.agent.capabilities.ecommerce_store).toBe(false);
 
-    expect(monthly).toBe(5000);
-    expect(yearly).toBe(54000);
-    expect(undiscounted).toBe(60000);
-    expect(savings).toBe(6000);
-    expect(Math.round((savings / undiscounted) * 100)).toBe(10);
+    // INNOICA Commerce (6 500 FCFA/mo, 70 200 FCFA/yr)
+    const commerceMonthly = PLAN_CATALOG.commerce.priceMonthly;
+    const commerceYearly = PLAN_CATALOG.commerce.priceYearly;
+    const commerceUndiscounted = commerceMonthly * 12; // 78000
+    const commerceSavings = commerceUndiscounted - commerceYearly; // 7800
+    expect(commerceMonthly).toBe(6500);
+    expect(commerceYearly).toBe(70200);
+    expect(commerceUndiscounted).toBe(78000);
+    expect(commerceSavings).toBe(7800);
+    expect(Math.round((commerceSavings / commerceUndiscounted) * 100)).toBe(10);
+    expect(PLAN_CATALOG.commerce.capabilities.voice_message_understanding).toBe(true);
+    expect(PLAN_CATALOG.commerce.capabilities.ecommerce_store).toBe(true);
+
+    // Free plan (0 FCFA)
+    expect(PLAN_CATALOG.free.priceMonthly).toBe(0);
+    expect(PLAN_CATALOG.free.priceYearly).toBe(0);
+    expect(PLAN_CATALOG.free.capabilities.voice_message_understanding).toBe(false);
+    expect(PLAN_CATALOG.free.capabilities.ecommerce_store).toBe(false);
+
+    // Grandfathered Starter (5 000 FCFA/mo, 54 000 FCFA/yr)
+    const starterMonthly = PLAN_CATALOG.starter.priceMonthly;
+    const starterYearly = PLAN_CATALOG.starter.priceYearly;
+    expect(starterMonthly).toBe(5000);
+    expect(starterYearly).toBe(54000);
+    expect(PLAN_CATALOG.starter.capabilities.ecommerce_store).toBe(false);
   });
 
   it('validates payment declaration & Super Admin review schemas cleanly', () => {
     expect(
       paymentDeclarationSchema.safeParse({
+        planSlug: 'agent',
         billingCycle: 'yearly',
         paymentMethod: 'Orange Money',
         reference: 'OM-2026-99182',
+      }).success
+    ).toBe(true);
+
+    expect(
+      paymentDeclarationSchema.safeParse({
+        planSlug: 'commerce',
+        billingCycle: 'monthly',
+        paymentMethod: 'MTN MoMo',
+        reference: 'MOMO-2026-11223',
       }).success
     ).toBe(true);
 

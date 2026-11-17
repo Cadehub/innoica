@@ -11,10 +11,35 @@ export async function callGemini(options: LLMGenerateOptions): Promise<string> {
   const systemMessage = messages.find((m) => m.role === 'system');
   const chatMessages = messages
     .filter((m) => m.role !== 'system')
-    .map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
+    .map((m) => {
+      let parts: any[] = [];
+      if (typeof m.content === 'string') {
+        parts = [{ text: m.content }];
+      } else if (Array.isArray(m.content)) {
+        parts = m.content.map((part) => {
+          if (part.type === 'text') {
+            return { text: part.text };
+          }
+          if (part.type === 'image_url') {
+            const url = part.image_url.url;
+            const match = /^data:([^;]+);base64,(.+)$/.exec(url);
+            if (match) {
+              return {
+                inlineData: {
+                  mimeType: match[1],
+                  data: match[2],
+                },
+              };
+            }
+          }
+          return { text: '' };
+        });
+      }
+      return {
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts,
+      };
+    });
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
@@ -27,8 +52,15 @@ export async function callGemini(options: LLMGenerateOptions): Promise<string> {
   };
 
   if (systemMessage) {
+    const systemText =
+      typeof systemMessage.content === 'string'
+        ? systemMessage.content
+        : systemMessage.content
+            .filter((p) => p.type === 'text')
+            .map((p) => (p as { type: 'text'; text: string }).text)
+            .join('\n');
     payload.systemInstruction = {
-      parts: [{ text: systemMessage.content }],
+      parts: [{ text: systemText }],
     };
   }
 

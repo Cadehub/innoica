@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useRouter } from '@/i18n/routing';
 import { createClient } from '@/lib/supabase/client';
-import { AI_PROVIDERS_CONFIG } from '@innoica/shared';
+import { AI_PROVIDERS_CONFIG, PlanSlug } from '@innoica/shared';
 import { PhoneInput } from '@/components/phone-input';
 import { AutoGrowTextarea } from '@/components/auto-grow-textarea';
 import {
@@ -44,7 +44,7 @@ export function AgentConfigClient({
   credentials: any[];
   knowledgeSources: any[];
   initialMemories: any[];
-  planSlug: 'free' | 'starter';
+  planSlug: PlanSlug;
   allowedKnowledgeTypes: string[];
   maxKnowledgeDocs: number;
 }) {

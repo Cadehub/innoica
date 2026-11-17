@@ -6,16 +6,18 @@
 import crypto from 'node:crypto';
 import { createWorkerSupabaseClient } from '@innoica/database';
 import {
+  AI_PROVIDERS_CONFIG,
   AIProvider,
   applyPlanWatermark,
   ClarificationState,
   resolveOfficialAppUrl,
   resolveVoiceCapabilities,
   sanitizeKnowledgeContent,
+  VISION_FALLBACK_MESSAGES,
   VoiceMessageMetadata,
 } from '@innoica/shared';
 import { decryptSecret } from '@innoica/shared/server';
-import { dispatchLLMCall, LLMMessage } from './adapters/index.js';
+import { dispatchLLMCall, LLMContentPart, LLMMessage } from './adapters/index.js';
 import {
   buildVoiceSystemDirectives,
   decideVoicePreLlmAction,
@@ -34,14 +36,22 @@ export interface VoiceAnalysisInput {
   speechSignals?: Record<string, unknown>;
 }
 
+export interface ImageAnalysisInput {
+  mimeType: string;
+  base64Data?: string;
+  caption?: string;
+  isCorrupted?: boolean;
+}
+
 export interface GenerateResponseInput {
   agentId: string;
   conversationId: string;
   contactPhoneNumber: string;
   replyJid?: string;
   incomingMessage: string;
-  incomingMessageType?: 'text' | 'audio';
+  incomingMessageType?: 'text' | 'audio' | 'image';
   voiceContext?: VoiceAnalysisInput;
+  imageContext?: ImageAnalysisInput;
   idempotencyKey?: string;
 }
 
@@ -60,6 +70,31 @@ export interface GenerateResponseOutput {
   };
 }
 
+function buildVisionSystemDirectives(options: {
+  isVisionInput: boolean;
+  language: 'fr' | 'en';
+}): string {
+  if (!options.isVisionInput) return '';
+
+  if (options.language === 'en') {
+    return `\n<vision_directives>
+DIRECTIVES FOR VISUAL AND IMAGE UNDERSTANDING (INVIOLABLE):
+1. The user has sent a photograph/image directly via WhatsApp. Carefully analyze all visual elements (objects, text, labels, models, condition).
+2. Compare the identified visual items with the official products and data available in <connaissances_autorisees> / catalog.
+3. STRICT ANTI-HALLUCINATION POLICY: Never invent, extrapolate, or hallucinate product prices, discounts, stock availability, or non-existent catalog items. If a product in the image is not in your authorized knowledge base or catalog, explicitly state that you cannot confirm its price or availability and offer to connect the user with the team.
+4. When identifying a product, mention its exact name, specifications, and verified details present in your authorized knowledge base.
+</vision_directives>\n`;
+  }
+
+  return `\n<vision_directives>
+DIRECTIVES DE COMPRÉHENSION VISUELLE ET D'ANALYSE D'IMAGE (INVIOLABLES) :
+1. L'utilisateur a envoyé une photo/image directement via WhatsApp. Analyse attentivement tous les éléments visuels (objets, textes, étiquettes, modèles, état).
+2. Compare les articles identifiés avec les produits et données officielles disponibles dans <connaissances_autorisees> / catalogue de l'entreprise.
+3. RÈGLE STRICTE ANTI-HALLUCINATION : N'invente JAMAIS, n'extrapole jamais et n'hallucine jamais de prix, de promotions, de stocks disponibles ou d'articles inexistants dans le catalogue. Si le produit visible sur l'image n'est pas présent dans tes connaissances autorisées, indique poliment que tu ne peux pas confirmer son prix ou sa disponibilité et propose d'orienter le client vers l'équipe commerciale.
+4. Si le produit correspond à un article officiel vérifié, cite son nom exact, ses caractéristiques et les détails confirmés dans tes connaissances autorisées.
+</vision_directives>\n`;
+}
+
 export class AIOrchestrator {
   private supabase = createWorkerSupabaseClient();
   private whatsappWorkerUrl: string;
@@ -73,6 +108,17 @@ export class AIOrchestrator {
   }
 
   public async generateAndSendResponse(input: GenerateResponseInput): Promise<GenerateResponseOutput> {
+    try {
+      return await this.executeGenerateAndSendResponse(input);
+    } finally {
+      if (input.imageContext?.base64Data) {
+        input.imageContext.base64Data = '';
+        delete (input.imageContext as any).base64Data;
+      }
+    }
+  }
+
+  private async executeGenerateAndSendResponse(input: GenerateResponseInput): Promise<GenerateResponseOutput> {
     const t0 = Date.now();
     const { agentId, conversationId, contactPhoneNumber, replyJid, incomingMessage } = input;
     const workerSecret = this.getWorkerSecret();
@@ -130,6 +176,7 @@ export class AIOrchestrator {
     }
 
     const isAudioInput = input.incomingMessageType === 'audio';
+    const isImageInput = input.incomingMessageType === 'image';
     const voiceCaps = resolveVoiceCapabilities({
       planSlug: ctx.voiceEntitlement?.planSlug || plan?.plan_slug,
       capabilities: ctx.voiceEntitlement?.capabilities,
@@ -147,14 +194,53 @@ export class AIOrchestrator {
       incomingText: incomingMessage,
     });
 
-    const preDecision = isAudioInput
-      ? decideVoicePreLlmAction({
-          hasVoiceUnderstanding,
-          qualityCategory: input.voiceContext?.voiceMetadata?.qualityCategory,
-          transcript: incomingMessage,
-          language: activeLanguage,
-        })
-      : { action: 'run_llm' as const, comprehensionStatus: 'sufficient' as const };
+    let isModelVisionCapable = false;
+    if (agent.ai_provider && agent.ai_model) {
+      const providerCfg = (AI_PROVIDERS_CONFIG as any)[agent.ai_provider];
+      const modelCfg = providerCfg?.models?.find((m: any) => m.id === agent.ai_model);
+      isModelVisionCapable = Boolean(modelCfg?.isVision);
+    }
+
+    let preDecision: {
+      action: 'run_llm' | 'send_static';
+      comprehensionStatus: 'sufficient' | 'partial' | 'insufficient';
+      reason?: string;
+      staticReply?: string;
+    };
+
+    if (isAudioInput) {
+      preDecision = decideVoicePreLlmAction({
+        hasVoiceUnderstanding,
+        qualityCategory: input.voiceContext?.voiceMetadata?.qualityCategory,
+        transcript: incomingMessage,
+        language: activeLanguage,
+      });
+    } else if (isImageInput) {
+      if (input.imageContext?.isCorrupted) {
+        preDecision = {
+          action: 'send_static',
+          comprehensionStatus: 'insufficient',
+          reason: 'corrupted_image',
+          staticReply:
+            VISION_FALLBACK_MESSAGES.corrupted_image[activeLanguage === 'en' ? 'en' : 'fr'],
+        };
+      } else if (!isModelVisionCapable) {
+        preDecision = {
+          action: 'send_static',
+          comprehensionStatus: 'insufficient',
+          reason: 'unsupported_model',
+          staticReply:
+            VISION_FALLBACK_MESSAGES.unsupported_model[activeLanguage === 'en' ? 'en' : 'fr'],
+        };
+      } else {
+        preDecision = {
+          action: 'run_llm',
+          comprehensionStatus: 'sufficient',
+        };
+      }
+    } else {
+      preDecision = { action: 'run_llm', comprehensionStatus: 'sufficient' };
+    }
 
     // 3. Déchiffrer la clé API BYOK (requis uniquement si appel LLM nécessaire)
     let apiKey = '';
@@ -305,33 +391,50 @@ export class AIOrchestrator {
         sensitiveIntent,
       });
 
+      const visionDirectives = buildVisionSystemDirectives({
+        isVisionInput: isImageInput,
+        language: activeLanguage === 'en' ? 'en' : 'fr',
+      });
+
       const systemPromptContent = `${agent.system_prompt}
 
 Traits de personnalité : ${traits || 'Professionnel, courtois'}
 Langue détectée pour cet échange : ${activeLanguage === 'en' ? 'Anglais (English)' : 'Français'}
 ${memoryContext}
-${knowledgeContext}${voiceDirectives}
+${knowledgeContext}${voiceDirectives}${visionDirectives}
 RÈGLES ET DIRECTIVES OPÉRATIONNELLES INVIOLABLES :
 1. RÈGLE LINGUISTIQUE STRICTE : Tu DOIS IMPÉRATIVEMENT répondre dans la langue exacte utilisée par le client (s'il écrit ou parle en français, réponds en français ; s'il s'exprime en anglais, réponds en anglais ; s'il emploie une autre langue ou un mélange, adapte-toi fidèlement et réponds dans sa langue).
 2. EXPLOITATION TOTALE DES CONNAISSANCES : Tu DOIS impérativement t'appuyer sur l'ensemble des connaissances fournies dans <connaissances_autorisees> (FAQ, fiches produits, documents TXT/PDF, sites web et liens d'entreprise). Réponds avec les informations réelles (services, tarifs, coordonnées, horaires). Si un lien web pertinent est indiqué dans les sources, fournis-le au client pour l'orienter.
 3. CONCISION ET FORMAT WHATSAPP : Formule des messages courts, limpides et agréables à lire sur mobile (WhatsApp).
 4. SÉCURITÉ : Ne simule jamais d'action externe ni de validation de rendez-vous ou transaction sans confirmation humaine. Si une information très spécifique est totalement absente de tes connaissances, reconnais-le poliment et propose d'orienter le client vers l'équipe.`;
 
-      const userTurnContent = isAudioInput
-        ? `[Message vocal ${activeLanguage}] ${incomingMessage}`
-        : incomingMessage;
+      let userTurnContent: string | LLMContentPart[];
+
+      if (isImageInput && input.imageContext?.base64Data) {
+        const mime = input.imageContext.mimeType || 'image/jpeg';
+        const dataUri = `data:${mime};base64,${input.imageContext.base64Data}`;
+        const textPrompt = incomingMessage.trim()
+          ? incomingMessage.trim()
+          : (activeLanguage === 'en'
+              ? "Please examine this image and provide helpful information according to our business knowledge."
+              : "Veuillez analyser cette image et me renseigner en fonction des connaissances de l'entreprise.");
+
+        userTurnContent = [
+          { type: 'text', text: textPrompt },
+          { type: 'image_url', image_url: { url: dataUri } },
+        ];
+      } else if (isAudioInput) {
+        userTurnContent = `[Message vocal ${activeLanguage}] ${incomingMessage}`;
+      } else {
+        userTurnContent = incomingMessage;
+      }
 
       const llmMessages: LLMMessage[] = [
         { role: 'system', content: systemPromptContent },
         ...historyMessages,
       ];
 
-      if (
-        historyMessages.length === 0 ||
-        historyMessages[historyMessages.length - 1].content !== userTurnContent
-      ) {
-        llmMessages.push({ role: 'user', content: userTurnContent });
-      }
+      llmMessages.push({ role: 'user', content: userTurnContent });
 
       // 6. Appel au fournisseur IA (BYOK) ; libérer le quota réservé en cas d'échec
       let generatedReply: string;
@@ -509,7 +612,7 @@ RÈGLES ET DIRECTIVES OPÉRATIONNELLES INVIOLABLES :
 
     const totalTime = Date.now() - t0;
     console.info(
-      `[AI-Runtime] Réponse envoyée en ${totalTime}ms (ctx: ${tCtx}ms, quota: ${tQuota}ms, llm: ${tLlm}ms) agent=${agentId} conv=${conversationId} type=${isAudioInput ? 'audio' : 'text'} lang=${activeLanguage} plan=${quotaRes.planSlug} watermark=${hasWatermark} msgId=${sentMessageId}`
+      `[AI-Runtime] Réponse envoyée en ${totalTime}ms (ctx: ${tCtx}ms, quota: ${tQuota}ms, llm: ${tLlm}ms) agent=${agentId} conv=${conversationId} type=${isAudioInput ? 'audio' : isImageInput ? 'image' : 'text'} lang=${activeLanguage} plan=${quotaRes.planSlug} watermark=${hasWatermark} msgId=${sentMessageId}`
     );
 
     return {

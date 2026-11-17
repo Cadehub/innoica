@@ -32,7 +32,7 @@ export default async function SuperAdminPage({
 
   const [plansRes, declarationsRes, workspacesRes, agentsRes, settingsRes, logsRes, statsRes, voiceJobsRes] =
     await Promise.all([
-      supabase.from('plans').select('*').in('slug', ['free', 'starter']).order('sort_order'),
+      supabase.from('plans').select('*').in('slug', ['free', 'agent', 'commerce', 'starter']).order('sort_order'),
       supabase
         .from('payment_declarations')
         .select('*, workspaces(name, slug), plans(slug, name_fr)')

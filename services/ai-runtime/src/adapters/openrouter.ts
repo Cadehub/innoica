@@ -2,9 +2,13 @@
 // INNOICA WhatsApp Agents v2.0 — OpenRouter Adapter
 // ====================================================================
 
+export type LLMContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 export interface LLMMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: string | LLMContentPart[];
 }
 
 export interface LLMGenerateOptions {

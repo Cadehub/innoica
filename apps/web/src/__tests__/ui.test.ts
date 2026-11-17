@@ -18,6 +18,10 @@ describe('apps/web UI & i18n Qualification', () => {
     expect(enMessages.Common.appName).toBe('Innoica Agent Studio');
     expect(frMessages.Subscription.yearly).toContain('-10%');
     expect(enMessages.Subscription.yearly).toContain('-10%');
+    expect(PLAN_CATALOG.agent.priceMonthly).toBe(3500);
+    expect(PLAN_CATALOG.agent.priceYearly).toBe(37800);
+    expect(PLAN_CATALOG.commerce.priceMonthly).toBe(6500);
+    expect(PLAN_CATALOG.commerce.priceYearly).toBe(70200);
     expect(PLAN_CATALOG.starter.priceMonthly).toBe(5000);
     expect(PLAN_CATALOG.starter.priceYearly).toBe(54000);
   });

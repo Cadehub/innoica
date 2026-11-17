@@ -125,8 +125,8 @@ describe('INNOICA WhatsApp Agents v2.0 — End-to-End System Invariants', () => 
       expect(templateIds).toContain('custom');
     });
 
-    it('defines only Free and Starter launch plans in XAF (FCFA)', () => {
-      expect(Object.keys(PLAN_CATALOG)).toEqual(['free', 'starter']);
+    it('defines Free, Agent, Commerce and Grandfathered Starter launch plans in XAF (FCFA)', () => {
+      expect(Object.keys(PLAN_CATALOG)).toEqual(['free', 'agent', 'commerce', 'starter']);
 
       expect(PLAN_CATALOG.free.priceMonthly).toBe(0);
       expect(PLAN_CATALOG.free.priceYearly).toBe(0);
@@ -136,6 +136,18 @@ describe('INNOICA WhatsApp Agents v2.0 — End-to-End System Invariants', () => 
       expect(PLAN_CATALOG.free.maxDailyBotRepliesPerConv).toBe(10);
       expect(PLAN_CATALOG.free.historyRetentionDays).toBe(7);
       expect(PLAN_CATALOG.free.hasWatermark).toBe(true);
+
+      expect(PLAN_CATALOG.agent.priceMonthly).toBe(3500);
+      expect(PLAN_CATALOG.agent.priceYearly).toBe(37800);
+      expect(PLAN_CATALOG.agent.maxAgents).toBe(2);
+      expect(PLAN_CATALOG.agent.maxConnections).toBe(2);
+      expect(PLAN_CATALOG.agent.hasWatermark).toBe(false);
+
+      expect(PLAN_CATALOG.commerce.priceMonthly).toBe(6500);
+      expect(PLAN_CATALOG.commerce.priceYearly).toBe(70200);
+      expect(PLAN_CATALOG.commerce.maxAgents).toBe(3);
+      expect(PLAN_CATALOG.commerce.maxConnections).toBe(3);
+      expect(PLAN_CATALOG.commerce.hasWatermark).toBe(false);
 
       expect(PLAN_CATALOG.starter.priceMonthly).toBe(5000);
       expect(PLAN_CATALOG.starter.priceYearly).toBe(54000);

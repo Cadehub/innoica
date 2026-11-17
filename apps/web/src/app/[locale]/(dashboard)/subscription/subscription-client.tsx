@@ -11,10 +11,11 @@ import {
   Loader2,
   AlertCircle,
   Sparkles,
+  ShoppingBag,
   XCircle,
   Zap,
 } from 'lucide-react';
-import { WorkspaceQuotaSnapshot } from '@innoica/shared';
+import { PlanSlug, WorkspaceQuotaSnapshot } from '@innoica/shared';
 import { AutoGrowTextarea } from '@/components/auto-grow-textarea';
 import { formatPriceXaf } from '@/lib/utils';
 
@@ -25,13 +26,14 @@ export function SubscriptionPlansClient({
   initialDeclarations,
 }: {
   plans: any[];
-  currentPlanSlug: 'free' | 'starter';
+  currentPlanSlug: PlanSlug;
   quota: WorkspaceQuotaSnapshot | null;
   initialDeclarations: any[];
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+  const [selectedPlanSlug, setSelectedPlanSlug] = useState<'agent' | 'commerce' | 'starter'>('agent');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const [paymentMethod, setPaymentMethod] = useState('Orange Money');
@@ -71,12 +73,43 @@ export function SubscriptionPlansClient({
   }, [supabase, router]);
 
   const freePlan = plans.find((p) => p.slug === 'free');
+  const agentPlan = plans.find((p) => p.slug === 'agent');
+  const commercePlan = plans.find((p) => p.slug === 'commerce');
   const starterPlan = plans.find((p) => p.slug === 'starter');
+
+  const agentMonthly = Number(agentPlan?.price_monthly_xaf ?? 3500);
+  const agentYearly = Number(agentPlan?.price_yearly_xaf ?? 37800);
+  const agentAnnualFull = agentMonthly * 12;
+  const agentAnnualSavings = Math.max(0, agentAnnualFull - agentYearly);
+
+  const commerceMonthly = Number(commercePlan?.price_monthly_xaf ?? 6500);
+  const commerceYearly = Number(commercePlan?.price_yearly_xaf ?? 70200);
+  const commerceAnnualFull = commerceMonthly * 12;
+  const commerceAnnualSavings = Math.max(0, commerceAnnualFull - commerceYearly);
 
   const starterMonthly = Number(starterPlan?.price_monthly_xaf ?? 5000);
   const starterYearly = Number(starterPlan?.price_yearly_xaf ?? 54000);
-  const annualFullPrice = starterMonthly * 12;
-  const annualSavings = Math.max(0, annualFullPrice - starterYearly);
+
+  const currentSelectedPrice = useMemo(() => {
+    if (selectedPlanSlug === 'commerce') {
+      return billingCycle === 'yearly' ? commerceYearly : commerceMonthly;
+    }
+    if (selectedPlanSlug === 'starter') {
+      return billingCycle === 'yearly' ? starterYearly : starterMonthly;
+    }
+    return billingCycle === 'yearly' ? agentYearly : agentMonthly;
+  }, [selectedPlanSlug, billingCycle, commerceYearly, commerceMonthly, starterYearly, starterMonthly, agentYearly, agentMonthly]);
+
+  const selectedPlanName = useMemo(() => {
+    if (selectedPlanSlug === 'commerce') return 'INNOICA Commerce';
+    if (selectedPlanSlug === 'starter') return 'Starter (Grandfathered)';
+    return 'INNOICA Agent';
+  }, [selectedPlanSlug]);
+
+  const handleOpenModal = (planSlug: 'agent' | 'commerce' | 'starter') => {
+    setSelectedPlanSlug(planSlug);
+    setShowPaymentModal(true);
+  };
 
   const handleSubmitDeclaration = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,6 +121,7 @@ export function SubscriptionPlansClient({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          planSlug: selectedPlanSlug,
           billingCycle,
           paymentMethod,
           reference,
@@ -166,13 +200,13 @@ export function SubscriptionPlansClient({
         </div>
       </div>
 
-      {/* Exact 2 Plans Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Commercial Plans Grid (Free, Agent, Commerce) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Plan FREE */}
         <div
           className={`rounded-xl border p-5 sm:p-6 flex flex-col justify-between bg-white transition-colors ${
             currentPlanSlug === 'free'
-              ? 'border-zinc-900 shadow-2xs'
+              ? 'border-zinc-900 shadow-2xs ring-1 ring-zinc-900'
               : 'border-zinc-200'
           }`}
         >
@@ -195,7 +229,7 @@ export function SubscriptionPlansClient({
 
             <p className="mt-1.5 text-xs text-zinc-500">
               {freePlan?.description_fr ||
-                'Testez Innoica Agent Studio avec 1 agent WhatsApp et votre clé BYOK.'}
+                'Découvrez Innoica Agent Studio avec 1 agent WhatsApp et quota journalier gratuit.'}
             </p>
 
             <div className="mt-5 border-t border-zinc-100 pt-4 space-y-2 text-xs text-zinc-700">
@@ -206,20 +240,14 @@ export function SubscriptionPlansClient({
                 '10 réponses du bot / conversation / jour',
                 'BYOK + Connaissances FAQ & TXT',
                 'Historique 7 jours',
-                'Messages texte uniquement (vocaux réservés aux plans payants)',
-                'Signature INNOICA sur chaque réponse IA',
+                'Messages texte uniquement',
+                'Signature INNOICA sur chaque réponse',
               ]).map((feat: string) => (
                 <div key={feat} className="flex items-center gap-2">
                   <Check className="h-4 w-4 text-zinc-900 shrink-0" />
                   <span>{feat}</span>
                 </div>
               ))}
-              {freePlan?.features && !freePlan.features.some((f: string) => /voc|voice/i.test(f)) && (
-                <div className="flex items-center gap-2 text-zinc-400">
-                  <Check className="h-4 w-4 text-zinc-300 shrink-0" />
-                  <span>Messages texte uniquement (vocaux réservés aux plans payants)</span>
-                </div>
-              )}
             </div>
           </div>
 
@@ -229,15 +257,15 @@ export function SubscriptionPlansClient({
                 ? `Quota du jour : ${quota?.dailyNewConversationsUsed ?? 0} / ${
                     quota?.maxDailyNewConversations ?? 5
                   } conv.`
-                : 'Offre de base gratuite'}
+                : 'Offre gratuite'}
             </div>
           </div>
         </div>
 
-        {/* Plan STARTER */}
+        {/* Plan INNOICA AGENT (3 500 FCFA) */}
         <div
           className={`rounded-xl border p-5 sm:p-6 flex flex-col justify-between bg-white relative overflow-hidden transition-colors ${
-            currentPlanSlug === 'starter'
+            currentPlanSlug === 'agent'
               ? 'border-zinc-900 shadow-2xs ring-1 ring-zinc-900'
               : 'border-zinc-300 hover:border-zinc-400'
           }`}
@@ -245,16 +273,16 @@ export function SubscriptionPlansClient({
           <div>
             <div className="flex items-center justify-between">
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-900 font-mono">
-                <Zap className="h-3.5 w-3.5 text-emerald-600" />
-                Starter
+                <Zap className="h-3.5 w-3.5 text-blue-600" />
+                INNOICA Agent
               </span>
-              {currentPlanSlug === 'starter' ? (
-                <span className="rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 text-[10px] font-mono font-medium">
+              {currentPlanSlug === 'agent' ? (
+                <span className="rounded-md bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.5 text-[10px] font-mono font-medium">
                   Plan actif
                 </span>
               ) : (
                 <span className="rounded-md bg-zinc-100 border border-zinc-200 text-zinc-700 px-2 py-0.5 text-[10px] font-mono font-medium">
-                  Recommandé Entreprises
+                  Relation Client
                 </span>
               )}
             </div>
@@ -263,7 +291,7 @@ export function SubscriptionPlansClient({
               {billingCycle === 'monthly' ? (
                 <div className="flex items-baseline gap-1">
                   <span className="text-3xl font-semibold font-mono tabular-nums text-zinc-900">
-                    {formatPriceXaf(starterMonthly)}
+                    {formatPriceXaf(agentMonthly)}
                   </span>
                   <span className="text-xs text-zinc-500">/ mois</span>
                 </div>
@@ -271,16 +299,16 @@ export function SubscriptionPlansClient({
                 <div>
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-3xl font-semibold font-mono tabular-nums text-zinc-900">
-                      {formatPriceXaf(starterYearly)}
+                      {formatPriceXaf(agentYearly)}
                     </span>
                     <span className="text-xs text-zinc-500">/ an</span>
                   </div>
                   <div className="mt-0.5 flex items-center gap-2 text-xs">
                     <span className="line-through text-zinc-400 font-mono tabular-nums">
-                      {formatPriceXaf(annualFullPrice)}/an
+                      {formatPriceXaf(agentAnnualFull)}/an
                     </span>
                     <span className="font-semibold text-emerald-700 font-mono tabular-nums">
-                      Économisez {formatPriceXaf(annualSavings)} (-10%)
+                      Économisez {formatPriceXaf(agentAnnualSavings)} (-10%)
                     </span>
                   </div>
                 </div>
@@ -288,52 +316,137 @@ export function SubscriptionPlansClient({
             </div>
 
             <p className="mt-1.5 text-xs text-zinc-500">
-              {starterPlan?.description_fr ||
-                'Jusqu’à 2 agents, conversations et réponses illimitées côté INNOICA, PDF/URL et zéro signature.'}
+              {agentPlan?.description_fr ||
+                'Agent IA complet avec compréhension vocale, conversations illimitées et zéro signature.'}
             </p>
 
             <div className="mt-5 border-t border-zinc-100 pt-4 space-y-2 text-xs text-zinc-700">
-              {(starterPlan?.features || [
+              {(agentPlan?.features || [
                 'Jusqu’à 2 Agents IA WhatsApp',
                 'Jusqu’à 2 Numéros WhatsApp connectés',
-                'Compréhension des messages vocaux (FR & EN) incluse sans frais',
-                'Conversations quotidiennes illimitées côté INNOICA',
-                'Réponses quotidiennes illimitées côté INNOICA',
-                'FAQ, Import PDF, TXT et URL publique',
-                'Mémoire durable contact & conversation',
-                'Inbox complète, Human Takeover & historique étendu',
-                'Aucune signature publicitaire INNOICA',
+                'Compréhension vocale FR/EN incluse sans frais',
+                'Conversations quotidiennes sans quota INNOICA',
+                'Réponses IA quotidiennes sans quota INNOICA',
+                'Connaissances : FAQ, PDF, TXT & URLs',
+                'Mémoire durable par contact & conversation',
+                'Inbox temps réel & Human Takeover',
+                'Sans signature publicitaire INNOICA',
+              ]).map((feat: string) => (
+                <div key={feat} className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-blue-600 shrink-0" />
+                  <span>{feat}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={() => handleOpenModal('agent')}
+              className="w-full flex items-center justify-center gap-2 rounded-lg bg-zinc-900 py-2.5 px-4 text-xs font-medium text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+            >
+              <CreditCard className="h-4 w-4" />
+              <span>
+                {currentPlanSlug === 'agent'
+                  ? 'Renouveler INNOICA Agent'
+                  : `Activer INNOICA Agent (${
+                      billingCycle === 'yearly' ? '37 800 FCFA/an' : '3 500 FCFA/mois'
+                    })`}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Plan INNOICA COMMERCE (6 500 FCFA) */}
+        <div
+          className={`rounded-xl border-2 p-5 sm:p-6 flex flex-col justify-between bg-white relative overflow-hidden transition-colors ${
+            currentPlanSlug === 'commerce'
+              ? 'border-emerald-600 shadow-2xs ring-1 ring-emerald-600'
+              : 'border-zinc-900 shadow-2xs'
+          }`}
+        >
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-emerald-700 font-mono">
+                <ShoppingBag className="h-3.5 w-3.5 text-emerald-600" />
+                INNOICA Commerce
+              </span>
+              {currentPlanSlug === 'commerce' ? (
+                <span className="rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 text-[10px] font-mono font-medium">
+                  Plan actif
+                </span>
+              ) : (
+                <span className="rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 px-2 py-0.5 text-[10px] font-mono font-semibold">
+                  Boutique + IA
+                </span>
+              )}
+            </div>
+
+            <div className="mt-3">
+              {billingCycle === 'monthly' ? (
+                <div className="flex items-baseline gap-1">
+                  <span className="text-3xl font-semibold font-mono tabular-nums text-zinc-900">
+                    {formatPriceXaf(commerceMonthly)}
+                  </span>
+                  <span className="text-xs text-zinc-500">/ mois</span>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-3xl font-semibold font-mono tabular-nums text-zinc-900">
+                      {formatPriceXaf(commerceYearly)}
+                    </span>
+                    <span className="text-xs text-zinc-500">/ an</span>
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-2 text-xs">
+                    <span className="line-through text-zinc-400 font-mono tabular-nums">
+                      {formatPriceXaf(commerceAnnualFull)}/an
+                    </span>
+                    <span className="font-semibold text-emerald-700 font-mono tabular-nums">
+                      Économisez {formatPriceXaf(commerceAnnualSavings)} (-10%)
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <p className="mt-1.5 text-xs text-zinc-500">
+              {commercePlan?.description_fr ||
+                'Tout INNOICA Agent + Moteur E-Commerce Natif, Storefront, Catalogue & Commandes Baileys.'}
+            </p>
+
+            <div className="mt-5 border-t border-zinc-100 pt-4 space-y-2 text-xs text-zinc-700">
+              {(commercePlan?.features || [
+                'Tout le plan INNOICA Agent',
+                'Jusqu’à 3 Agents IA WhatsApp & 3 numéros connectés',
+                'Boutique en ligne native hébergée par INNOICA',
+                'Constructeur visuel sécurisé sans code',
+                'Catalogue produits, variantes & gestion des stocks',
+                'Paniers & commandes en temps réel',
+                'Paiements manuels (Livraison, Retrait, Mobile Money)',
+                'Synchronisation catalogue & commandes WhatsApp',
               ]).map((feat: string) => (
                 <div key={feat} className="flex items-center gap-2">
                   <Check className="h-4 w-4 text-emerald-600 shrink-0" />
                   <span>{feat}</span>
                 </div>
               ))}
-              {starterPlan?.features && !starterPlan.features.some((f: string) => /voc|voice/i.test(f)) && (
-                <div className="flex items-center gap-2 font-medium text-emerald-800">
-                  <Check className="h-4 w-4 text-emerald-600 shrink-0" />
-                  <span>Compréhension des messages vocaux (FR & EN) incluse sans frais</span>
-                </div>
-              )}
             </div>
-
-            <p className="mt-3 text-[11px] text-zinc-400">
-              * « Illimité » signifie aucun quota quotidien imposé par INNOICA ; les limites techniques de WhatsApp et de votre fournisseur IA BYOK demeurent applicables.
-            </p>
           </div>
 
           <div className="mt-6">
             <button
               type="button"
-              onClick={() => setShowPaymentModal((v) => !v)}
-              className="w-full flex items-center justify-center gap-2 rounded-lg bg-zinc-900 py-2.5 px-4 text-xs font-medium text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+              onClick={() => handleOpenModal('commerce')}
+              className="w-full flex items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 px-4 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors cursor-pointer shadow-2xs"
             >
               <CreditCard className="h-4 w-4" />
               <span>
-                {currentPlanSlug === 'starter'
-                  ? 'Renouveler Starter'
-                  : `Activer Starter (${
-                      billingCycle === 'yearly' ? '54 000 FCFA/an' : '5 000 FCFA/mois'
+                {currentPlanSlug === 'commerce'
+                  ? 'Renouveler INNOICA Commerce'
+                  : `Activer INNOICA Commerce (${
+                      billingCycle === 'yearly' ? '70 200 FCFA/an' : '6 500 FCFA/mois'
                     })`}
               </span>
             </button>
@@ -341,7 +454,29 @@ export function SubscriptionPlansClient({
         </div>
       </div>
 
-      {/* Payment Declaration Form */}
+      {/* Grandfathered Starter Card if applicable */}
+      {currentPlanSlug === 'starter' && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase text-amber-900 font-mono">
+              <Zap className="h-4 w-4 text-amber-600" />
+              Abonnement Actif : Starter (Grandfathered)
+            </div>
+            <p className="text-xs text-amber-800 mt-1">
+              Vous bénéficiez de l’offre Starter historique à 5 000 FCFA/mois (54 000 FCFA/an). Vos conditions contractuelles restent intégralement préservées. Vous pouvez renouveler ou basculer sur INNOICA Commerce.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleOpenModal('starter')}
+            className="shrink-0 rounded-lg bg-amber-800 px-4 py-2 text-xs font-medium text-white hover:bg-amber-900 transition-colors cursor-pointer"
+          >
+            Renouveler Starter ({billingCycle === 'yearly' ? '54 000 FCFA/an' : '5 000 FCFA/mois'})
+          </button>
+        </div>
+      )}
+
+      {/* Payment Declaration Form Modal */}
       {showPaymentModal && (
         <form
           onSubmit={handleSubmitDeclaration}
@@ -350,8 +485,8 @@ export function SubscriptionPlansClient({
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-zinc-900">
-                Déclarer un paiement Starter (
-                {billingCycle === 'yearly' ? '54 000 FCFA / an' : '5 000 FCFA / mois'})
+                Déclarer un paiement {selectedPlanName} (
+                {formatPriceXaf(currentSelectedPrice)} / {billingCycle === 'yearly' ? 'an' : 'mois'})
               </h3>
               <p className="text-xs text-zinc-500 mt-0.5">
                 Effectuez votre règlement Orange Money, MTN MoMo ou virement puis renseignez la référence pour activation.
@@ -366,7 +501,24 @@ export function SubscriptionPlansClient({
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
+            <div>
+              <label className="block text-xs font-medium text-zinc-700 mb-1">
+                Offre sélectionnée
+              </label>
+              <select
+                value={selectedPlanSlug}
+                onChange={(e) => setSelectedPlanSlug(e.target.value as any)}
+                className="w-full rounded-lg border border-zinc-200 py-2 px-3 text-xs bg-white text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+              >
+                <option value="agent">INNOICA Agent (3 500 FCFA/m)</option>
+                <option value="commerce">INNOICA Commerce (6 500 FCFA/m)</option>
+                {currentPlanSlug === 'starter' && (
+                  <option value="starter">Starter Historique (5 000 FCFA/m)</option>
+                )}
+              </select>
+            </div>
+
             <div>
               <label className="block text-xs font-medium text-zinc-700 mb-1">
                 Moyen de paiement
@@ -430,7 +582,7 @@ export function SubscriptionPlansClient({
               className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50 cursor-pointer transition-colors"
             >
               {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              <span>Soumettre la preuve de paiement</span>
+              <span>Soumettre la preuve ({formatPriceXaf(currentSelectedPrice)})</span>
             </button>
           </div>
         </form>
@@ -445,42 +597,51 @@ export function SubscriptionPlansClient({
           <p className="text-xs text-zinc-400">Aucune déclaration soumise pour ce workspace.</p>
         ) : (
           <div className="divide-y divide-zinc-100">
-            {declarations.map((dec) => (
-              <div
-                key={dec.id}
-                className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
-              >
-                <div>
-                  <div className="font-semibold text-zinc-900">
-                    Starter ({dec.billing_cycle === 'yearly' ? 'Annuel' : 'Mensuel'}) —{' '}
-                    <span className="font-mono tabular-nums">{formatPriceXaf(Number(dec.amount_xaf))}</span>
-                  </div>
-                  <div className="text-[11px] text-zinc-500 mt-0.5">
-                    {dec.payment_method} • Réf : <span className="font-mono">{dec.reference}</span>
-                  </div>
-                  {dec.review_note && (
-                    <div className="text-[11px] text-zinc-600 mt-0.5">
-                      Note admin : {dec.review_note}
+            {declarations.map((dec) => {
+              const planLabel =
+                dec.plans?.name_fr ||
+                (dec.plans?.slug === 'commerce'
+                  ? 'INNOICA Commerce'
+                  : dec.plans?.slug === 'agent'
+                  ? 'INNOICA Agent'
+                  : 'Abonnement');
+              return (
+                <div
+                  key={dec.id}
+                  className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                >
+                  <div>
+                    <div className="font-semibold text-zinc-900">
+                      {planLabel} ({dec.billing_cycle === 'yearly' ? 'Annuel' : 'Mensuel'}) —{' '}
+                      <span className="font-mono tabular-nums">{formatPriceXaf(Number(dec.amount_xaf))}</span>
                     </div>
-                  )}
+                    <div className="text-[11px] text-zinc-500 mt-0.5">
+                      {dec.payment_method} • Réf : <span className="font-mono">{dec.reference}</span>
+                    </div>
+                    {dec.review_note && (
+                      <div className="text-[11px] text-zinc-600 mt-0.5">
+                        Note admin : {dec.review_note}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    {dec.status === 'approved' ? (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-800 border border-emerald-200">
+                        Validé
+                      </span>
+                    ) : dec.status === 'rejected' ? (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700 border border-red-200">
+                        Rejeté
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800 border border-amber-200">
+                        En attente de revue
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  {dec.status === 'approved' ? (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-800 border border-emerald-200">
-                      Validé
-                    </span>
-                  ) : dec.status === 'rejected' ? (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700 border border-red-200">
-                      Rejeté
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800 border border-amber-200">
-                      En attente de revue
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

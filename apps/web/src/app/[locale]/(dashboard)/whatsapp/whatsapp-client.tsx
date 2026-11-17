@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useRouter } from '@/i18n/routing';
 import { createClient } from '@/lib/supabase/client';
 import { PhoneInput } from '@/components/phone-input';
+import { PlanSlug } from '@innoica/shared';
 import {
   Smartphone,
   Copy,
@@ -23,7 +24,7 @@ export function WhatsAppPageClient({
 }: {
   agents: any[];
   maxConnections: number;
-  planSlug: 'free' | 'starter';
+  planSlug: PlanSlug;
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);

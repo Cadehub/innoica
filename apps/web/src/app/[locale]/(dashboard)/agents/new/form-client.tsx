@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Link, useRouter } from '@/i18n/routing';
-import { AI_PROVIDERS_CONFIG } from '@innoica/shared';
+import { AI_PROVIDERS_CONFIG, PlanSlug } from '@innoica/shared';
 import { AutoGrowTextarea } from '@/components/auto-grow-textarea';
 import {
   UserCheck,
@@ -37,7 +37,7 @@ export function AgentCreationForm({
 }: {
   templates: any[];
   credentials: any[];
-  planSlug: 'free' | 'starter';
+  planSlug: PlanSlug;
   maxAgents: number;
   currentAgentsCount: number;
 }) {

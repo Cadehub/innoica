@@ -126,7 +126,7 @@ describe('Realtime & Unslop Senior UX Verification Suite', () => {
     expect(landingCode).toContain("Score d'Efficacité Opérationnelle");
     expect(landingCode).toContain('testedVocal');
     expect(landingCode).toContain('testedTakeover');
-    expect(landingCode).toContain('5 000 FCFA');
+    expect(landingCode).toContain('3 500 FCFA');
 
     // Unslop checks: zero slop classes
     expect(landingCode).not.toContain('card-3d-tilt');

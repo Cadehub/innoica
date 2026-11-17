@@ -5,7 +5,7 @@
 
 import { proto } from '@whiskeysockets/baileys';
 import { createWorkerSupabaseClient } from '@innoica/database';
-import { normalizePhoneNumberForBaileys, type VoiceMessageMetadata } from '@innoica/shared';
+import { normalizePhoneNumberForBaileys, type VoiceMessageMetadata, type ImageMessageMetadata } from '@innoica/shared';
 import {
   extractAudioDescriptor,
   inspectAudioMagicBytes,
@@ -14,6 +14,13 @@ import {
   unwrapProtoMessage,
   validateAudioMetadataBeforeDownload,
 } from './audio-handler.js';
+import {
+  extractImageDescriptor,
+  inspectImageMagicBytes,
+  MAX_IMAGE_BYTES,
+  validateImageMetadataBeforeDownload,
+  type IncomingImageDescriptor,
+} from './image-handler.js';
 
 export type MediaDownloader = (agentId: string, msg: proto.IWebMessageInfo) => Promise<Buffer>;
 
@@ -48,7 +55,6 @@ export class WhatsAppMessageHandler {
     return (
       unwrapped.conversation ||
       unwrapped.extendedTextMessage?.text ||
-      unwrapped.imageMessage?.caption ||
       unwrapped.videoMessage?.caption ||
       unwrapped.documentMessage?.caption ||
       unwrapped.buttonsResponseMessage?.selectedDisplayText ||
@@ -159,6 +165,26 @@ export class WhatsAppMessageHandler {
       this.presenceSender(agentId, destinationJid, 'composing').catch(() => {});
     }
 
+    const imageDescriptor = extractImageDescriptor(msg.message);
+    if (imageDescriptor) {
+      try {
+        await this.handleIncomingImageMessage({
+          agentId,
+          rawJid: destinationJid,
+          contactPhoneNumber,
+          pushName: msg.pushName || '',
+          waMessageId,
+          imageDescriptor,
+          msg,
+        });
+      } finally {
+        if (this.presenceSender && destinationJid) {
+          this.presenceSender(agentId, destinationJid, 'paused').catch(() => {});
+        }
+      }
+      return;
+    }
+
     const textContent = this.extractMessageText(msg.message);
     if (textContent.trim()) {
       try {
@@ -185,7 +211,7 @@ export class WhatsAppMessageHandler {
       }
       const unwrappedKeys = Object.keys(unwrapProtoMessage(msg.message) || {});
       console.info(
-        `[Message-Handler] Message non-texte/non-audio ignoré de ${rawJid} keys=[${unwrappedKeys.join(',')}]`
+        `[Message-Handler] Message non-texte/non-audio/non-image ignoré de ${rawJid} keys=[${unwrappedKeys.join(',')}]`
       );
       return;
     }
@@ -264,6 +290,187 @@ export class WhatsAppMessageHandler {
       },
       workspaceId
     );
+  }
+
+  private async handleIncomingImageMessage(params: {
+    agentId: string;
+    rawJid: string;
+    contactPhoneNumber: string;
+    pushName: string;
+    waMessageId: string;
+    imageDescriptor: IncomingImageDescriptor;
+    msg: proto.IWebMessageInfo;
+  }): Promise<void> {
+    const captionText = (params.imageDescriptor.caption || '').trim();
+    const placeholderContent = captionText ? `[Photo] ${captionText}` : '[Photo]';
+    const initialMeta: ImageMessageMetadata = {
+      mimeType: params.imageDescriptor.mimeType,
+      fileSizeBytes: params.imageDescriptor.fileSizeBytes,
+      caption: params.imageDescriptor.caption,
+      processingStatus: 'completed',
+    };
+
+    const { data: ingestRes, error: ingestErr } = await this.supabase.rpc('worker_ingest_inbound_message', {
+      p_agent_id: params.agentId,
+      p_contact_phone: params.contactPhoneNumber,
+      p_push_name: params.pushName,
+      p_wa_message_id: params.waMessageId,
+      p_content: placeholderContent,
+      p_worker_secret: process.env.WORKER_INTERNAL_SECRET || null,
+      p_message_type: 'image',
+      p_image_metadata: initialMeta,
+    });
+
+    if (ingestErr || !ingestRes) {
+      console.error('[Message-Handler] Erreur ingestion message image:', ingestErr);
+      return;
+    }
+    if (!ingestRes.ok) {
+      console.info(`[Message-Handler] Image ignorée (${ingestRes.reason}) pour agent ${params.agentId}`);
+      return;
+    }
+
+    const { agentStatus, conversationId, controlMode, messageId, workspaceId } = ingestRes as {
+      ok: boolean;
+      agentStatus: string;
+      conversationId: string;
+      controlMode: 'ai_active' | 'human_takeover' | 'paused';
+      messageId: string;
+      workspaceId?: string;
+    };
+
+    if (agentStatus !== 'active' && agentStatus !== 'connected') {
+      console.info(`[Message-Handler] Agent ${params.agentId} inactif (statut: ${agentStatus}).`);
+      return;
+    }
+    if (controlMode === 'human_takeover' || controlMode === 'paused') {
+      console.info(`[Message-Handler] Conversation ${conversationId} en mode ${controlMode}. Image non traitée par l'IA.`);
+      return;
+    }
+
+    const idempotencyKey = params.waMessageId ? `wa:${params.agentId}:${params.waMessageId}` : `msg:${messageId}`;
+
+    if (!this.mediaDownloader) {
+      console.error('[Message-Handler] mediaDownloader indisponible pour télécharger l\'image.');
+      return;
+    }
+
+    let imageBuffer: Buffer | null = null;
+    try {
+      const preCheck = validateImageMetadataBeforeDownload(params.imageDescriptor);
+      if (!preCheck.valid) {
+        console.warn(`[Message-Handler] Métadonnées image invalides: ${preCheck.errorCode}`);
+        await this.dispatchToAiRuntime(
+          {
+            agentId: params.agentId,
+            conversationId,
+            contactPhoneNumber: params.contactPhoneNumber,
+            replyJid: params.rawJid,
+            incomingMessage: params.imageDescriptor.caption || '',
+            incomingMessageType: 'image',
+            imageContext: {
+              mimeType: params.imageDescriptor.mimeType || 'image/jpeg',
+              isCorrupted: true,
+              caption: params.imageDescriptor.caption || undefined,
+            },
+            idempotencyKey,
+          },
+          workspaceId
+        );
+        return;
+      }
+
+      imageBuffer = await this.mediaDownloader(params.agentId, params.msg);
+      if (!imageBuffer || imageBuffer.length === 0 || imageBuffer.length > MAX_IMAGE_BYTES) {
+        console.warn('[Message-Handler] Image téléchargée vide ou trop volumineuse');
+        await this.dispatchToAiRuntime(
+          {
+            agentId: params.agentId,
+            conversationId,
+            contactPhoneNumber: params.contactPhoneNumber,
+            replyJid: params.rawJid,
+            incomingMessage: params.imageDescriptor.caption || '',
+            incomingMessageType: 'image',
+            imageContext: {
+              mimeType: params.imageDescriptor.mimeType || 'image/jpeg',
+              isCorrupted: true,
+              caption: params.imageDescriptor.caption || undefined,
+            },
+            idempotencyKey,
+          },
+          workspaceId
+        );
+        return;
+      }
+
+      const detectedFormat = inspectImageMagicBytes(imageBuffer);
+      if (!detectedFormat) {
+        console.warn('[Message-Handler] Format image corrompu ou magic bytes non reconnus');
+        await this.dispatchToAiRuntime(
+          {
+            agentId: params.agentId,
+            conversationId,
+            contactPhoneNumber: params.contactPhoneNumber,
+            replyJid: params.rawJid,
+            incomingMessage: params.imageDescriptor.caption || '',
+            incomingMessageType: 'image',
+            imageContext: {
+              mimeType: params.imageDescriptor.mimeType || 'image/jpeg',
+              isCorrupted: true,
+              caption: params.imageDescriptor.caption || undefined,
+            },
+            idempotencyKey,
+          },
+          workspaceId
+        );
+        return;
+      }
+
+      const mimeType = detectedFormat === 'jpeg' ? 'image/jpeg' : detectedFormat === 'png' ? 'image/png' : 'image/webp';
+      const base64Data = imageBuffer.toString('base64');
+
+      await this.dispatchToAiRuntime(
+        {
+          agentId: params.agentId,
+          conversationId,
+          contactPhoneNumber: params.contactPhoneNumber,
+          replyJid: params.rawJid,
+          incomingMessage: params.imageDescriptor.caption || '',
+          incomingMessageType: 'image',
+          imageContext: {
+            mimeType,
+            base64Data,
+            caption: params.imageDescriptor.caption || undefined,
+          },
+          idempotencyKey,
+        },
+        workspaceId
+      );
+    } catch (imgErr: any) {
+      console.error('[Message-Handler] Échec du téléchargement/traitement de l\'image:', imgErr);
+      await this.dispatchToAiRuntime(
+        {
+          agentId: params.agentId,
+          conversationId,
+          contactPhoneNumber: params.contactPhoneNumber,
+          replyJid: params.rawJid,
+          incomingMessage: params.imageDescriptor.caption || '',
+          incomingMessageType: 'image',
+          imageContext: {
+            mimeType: params.imageDescriptor.mimeType || 'image/jpeg',
+            isCorrupted: true,
+            caption: params.imageDescriptor.caption || undefined,
+          },
+          idempotencyKey,
+        },
+        workspaceId
+      );
+    } finally {
+      if (imageBuffer) {
+        imageBuffer.fill(0);
+        imageBuffer = null;
+      }
+    }
   }
 
   private async handleIncomingAudioMessage(params: {

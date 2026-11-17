@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { AutoGrowTextarea } from '@/components/auto-grow-textarea';
+import { PlanSlug } from '@innoica/shared';
 import {
   MessageSquare,
   Search,
@@ -30,7 +31,7 @@ import {
 interface InboxClientProps {
   initialConversations: any[];
   initialReplyCounts: Record<string, number>;
-  planSlug: 'free' | 'starter';
+  planSlug: PlanSlug;
   maxRepliesPerConv: number | null;
   maxNewConvs: number | null;
   usedNewConvs: number;

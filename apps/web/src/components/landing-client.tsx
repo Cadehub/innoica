@@ -19,6 +19,7 @@ import {
   MessageSquare,
   Mic,
   ShieldCheck,
+  ShoppingBag,
   Smartphone,
   Sparkles,
   UserCheck,
@@ -88,9 +89,9 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
   const hoursSavedPerMonth = Math.round((monthlyConvs * minsPerConv) / 60);
   const hourlyRate = operatorMonthlyCost / 160; // 160 hours standard work month
   const monthlySavingsXaf = Math.round(hoursSavedPerMonth * hourlyRate);
-  const starterPrice = billingCycle === 'yearly' ? 4500 : 5000;
-  const netSavingsXaf = Math.max(0, monthlySavingsXaf - starterPrice);
-  const roiPercentage = starterPrice > 0 ? Math.round((netSavingsXaf / starterPrice) * 100) : 0;
+  const agentPrice = billingCycle === 'yearly' ? 3150 : 3500;
+  const netSavingsXaf = Math.max(0, monthlySavingsXaf - agentPrice);
+  const roiPercentage = agentPrice > 0 ? Math.round((netSavingsXaf / agentPrice) * 100) : 0;
 
   // Efficiency Score /100
   const efficiencyScore = Math.min(
@@ -229,8 +230,8 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
         ? 'How does voice message understanding work?'
         : 'Comment fonctionne la compréhension des messages vocaux ?',
       a: isEn
-        ? 'On the Starter plan, incoming voice notes are transcribed locally on the server using an embedded multilingual INT8 Whisper engine with zero paid per-minute APIs. The agent extracts verified facts and responds in text in the customer\'s language.'
-        : 'Sur le plan Starter, les messages vocaux sont transcrits localement sur le serveur grâce à un moteur Whisper INT8 multilingue, sans aucun service externe facturé à la minute. L\'agent analyse le contenu et répond par écrit dans la langue du client.',
+        ? 'On our paid plans (INNOICA Agent & INNOICA Commerce), incoming voice notes are transcribed locally on the server using an embedded multilingual INT8 Whisper engine with zero paid per-minute APIs. The agent extracts verified facts and responds in text in the customer\'s language.'
+        : 'Sur nos forfaits payants (INNOICA Agent & INNOICA Commerce), les messages vocaux sont transcrits localement sur le serveur grâce à un moteur Whisper INT8 multilingue, sans aucun service externe facturé à la minute. L\'agent analyse le contenu et répond par écrit dans la langue du client.',
     },
     {
       q: isEn
@@ -242,11 +243,11 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
     },
     {
       q: isEn
-        ? 'What is the difference between Free and Starter?'
-        : 'Quelle est la différence entre les offres Free et Starter ?',
+        ? 'What are the differences between Free, INNOICA Agent, and INNOICA Commerce?'
+        : 'Quelles sont les différences entre Gratuit, INNOICA Agent et INNOICA Commerce ?',
       a: isEn
-        ? 'Free (0 FCFA) covers 1 agent, 1 number, 5 new conversations/day, 10 bot replies/conversation/day, 7-day history, text messages only, and includes an INNOICA signature. Starter (5,000 FCFA/month or 54,000 FCFA/year) unlocks 2 agents, 2 numbers, multilingual voice message understanding included with zero extra fee, PDF/URL ingestion, durable memory, no INNOICA daily limits, and zero advertising signature.'
-        : 'Free (0 FCFA) inclut 1 agent, 1 numéro, 5 nouvelles conversations/jour, 10 réponses IA/conversation/jour, historique 7 jours, messages texte uniquement et signature INNOICA. Starter (5 000 FCFA/mois ou 54 000 FCFA/an) débloque 2 agents, 2 numéros, la compréhension des messages vocaux FR & EN incluse sans supplément, PDF/URL, mémoire durable, aucun quota quotidien INNOICA et zéro signature publicitaire.',
+        ? 'Free (0 FCFA) covers 1 agent, 1 number, daily limits (5 conversations/day, 10 replies/conversation), text only, and an INNOICA watermark. INNOICA Agent (3,500 FCFA/month or 37,800 FCFA/year) unlocks 2 agents, 2 numbers, unlimited conversations/replies, native multilingual voice understanding, PDF/URL ingestion, durable memory, and zero signature. INNOICA Commerce (6,500 FCFA/month or 70,200 FCFA/year) adds a complete native multi-tenant e-commerce engine, hosted storefront, visual store builder, product catalog & variants, realtime shopping carts & orders, and manual payment verification.'
+        : 'Gratuit (0 FCFA) inclut 1 agent, 1 numéro, 5 conversations/jour, 10 réponses/conversation, texte uniquement et signature INNOICA. INNOICA Agent (3 500 FCFA/mois ou 37 800 FCFA/an) débloque 2 agents, 2 numéros, conversations/réponses illimitées, compréhension vocale native FR/EN, PDF/URL, mémoire durable et zéro signature. INNOICA Commerce (6 500 FCFA/mois ou 70 200 FCFA/an) ajoute le moteur e-commerce natif hébergé, vitrine boutique, constructeur visuel, catalogue, variantes, stocks, commandes et paiements manuels.',
     },
     {
       q: isEn
@@ -578,7 +579,7 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
                   <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
                   BYOK Clé Chiffrée AES-256
                 </span>
-                <span className="text-zinc-900 font-semibold">5 000 FCFA / mois</span>
+                <span className="text-zinc-900 font-semibold">3 500 FCFA / mois</span>
               </div>
             </div>
           </div>
@@ -645,7 +646,7 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
                 </li>
                 <li className="flex items-start gap-2.5">
                   <Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span><strong>BYOK + Facturation FCFA :</strong> Branchez vos clés IA sans surcoût. Forfait Starter à 5 000 FCFA/mois payable en Orange Money, MTN MoMo ou carte.</span>
+                  <span><strong>BYOK + Facturation FCFA :</strong> Branchez vos clés IA sans surcoût. Offres INNOICA Agent (3 500 FCFA/mois) et Commerce (6 500 FCFA/mois) payables en Orange Money, MTN MoMo ou carte.</span>
                 </li>
               </ul>
             </div>
@@ -1070,7 +1071,7 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
                     {monthlySavingsXaf.toLocaleString('fr-FR')} FCFA
                   </div>
                   <div className="text-[10px] text-emerald-800/80 mt-0.5 font-mono">
-                    pour 5 000 FCFA/mois de Starter
+                    pour 3 500 FCFA/mois d'INNOICA Agent
                   </div>
                 </div>
               </div>
@@ -1752,16 +1753,16 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
         </div>
       </section>
 
-      {/* Pricing: 2 Plans Only (Free + Starter) */}
+      {/* Pricing: 3 Commercial Offers (Free, Agent, Commerce) */}
       <section id="pricing" className="py-16 bg-[#fafafb] border-b border-zinc-200/80 scroll-mt-16">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 space-y-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 space-y-8">
           <div className="text-center max-w-xl mx-auto space-y-2">
             <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-zinc-900">
-              {isEn ? 'Two Clear Offers: Free & Starter' : 'Deux Offres Claires : Free et Starter'}
+              {isEn ? 'Three Clear Offers: Free, Agent & Commerce' : 'Trois Offres Claires : Gratuit, Agent & Commerce'}
             </h2>
             <p className="text-xs text-zinc-500">
               {isEn
-                ? 'Tarification in Central African Francs (FCFA / XAF).'
+                ? 'Pricing in Central African Francs (FCFA / XAF) for Cameroon and Central Africa.'
                 : 'Tarifs en Francs CFA (XAF) pour le Cameroun et l’Afrique centrale.'}
             </p>
 
@@ -1790,12 +1791,12 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* Free */}
             <div className="rounded-xl border border-zinc-200 bg-white p-6 flex flex-col justify-between shadow-2xs hover-card-lift transition-all duration-200">
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500 font-mono">
-                  Free
+                  Gratuit
                 </div>
                 <div className="mt-2 flex items-baseline gap-1">
                   <span className="text-3xl font-semibold font-mono tabular-nums text-zinc-900">
@@ -1804,7 +1805,7 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
                 </div>
                 <p className="mt-1 text-xs text-zinc-500">
                   {isEn
-                    ? 'Discover Innoica Agent Studio with daily limits.'
+                    ? 'Discover Innoica Agent Studio with daily quotas.'
                     : 'Pour découvrir Innoica Agent Studio gratuitement.'}
                 </p>
 
@@ -1817,7 +1818,7 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
                     isEn ? 'BYOK (Gemini, Groq, OpenRouter, OpenAI)' : 'BYOK (Gemini, Groq, OpenRouter, OpenAI)',
                     isEn ? 'Knowledge: FAQ & TXT (up to 3 sources)' : 'Connaissances : FAQ & TXT (3 sources)',
                     isEn ? '7-day conversation history' : 'Historique limité à 7 jours',
-                    isEn ? 'Text messages only (voice notes on Starter)' : 'Messages texte uniquement',
+                    isEn ? 'Text messages only' : 'Messages texte uniquement',
                     isEn ? 'INNOICA signature on bot replies' : 'Signature publicitaire INNOICA incluse',
                   ].map((f) => (
                     <div key={f} className="flex items-center gap-2">
@@ -1832,19 +1833,19 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
                 href={isAuthenticated ? '/dashboard' : '/register'}
                 className="mt-6 block w-full rounded-lg border border-zinc-300 bg-white py-2.5 text-center text-xs font-medium text-zinc-900 hover:bg-zinc-50 transition-colors cursor-pointer"
               >
-                {isEn ? 'Get Started Free' : 'Créer un compte Free'}
+                {isEn ? 'Get Started Free' : 'Créer un compte Gratuit'}
               </Link>
             </div>
 
-            {/* Starter */}
-            <div className="rounded-xl border-2 border-zinc-900 bg-white p-6 shadow-xs flex flex-col justify-between hover-card-lift transition-all duration-200">
+            {/* INNOICA Agent (3 500 FCFA) */}
+            <div className="rounded-xl border border-zinc-300 bg-white p-6 shadow-xs flex flex-col justify-between hover-card-lift transition-all duration-200">
               <div>
                 <div className="flex items-center justify-between">
                   <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-900 font-mono">
-                    <Zap className="h-3.5 w-3.5 text-emerald-600" /> Starter
+                    <Zap className="h-3.5 w-3.5 text-blue-600" /> INNOICA Agent
                   </span>
-                  <span className="rounded bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-700 font-mono">
-                    {isEn ? 'Recommended' : 'Recommandé'}
+                  <span className="rounded bg-blue-50 text-blue-800 px-2 py-0.5 text-[10px] font-semibold font-mono border border-blue-200">
+                    {isEn ? 'Customer Service' : 'Relation Client'}
                   </span>
                 </div>
 
@@ -1852,7 +1853,7 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
                   {billingCycle === 'monthly' ? (
                     <div className="flex items-baseline gap-1">
                       <span className="text-3xl font-semibold font-mono tabular-nums text-zinc-900">
-                        5 000 FCFA
+                        3 500 FCFA
                       </span>
                       <span className="text-xs text-zinc-500">/ {isEn ? 'month' : 'mois'}</span>
                     </div>
@@ -1860,20 +1861,20 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
                     <div>
                       <div className="flex items-baseline gap-1">
                         <span className="text-3xl font-semibold font-mono tabular-nums text-zinc-900">
-                          54 000 FCFA
+                          37 800 FCFA
                         </span>
                         <span className="text-xs text-zinc-500">/ {isEn ? 'year' : 'an'}</span>
                       </div>
                       <div className="text-[11px] text-emerald-600 font-medium mt-0.5 font-mono">
-                        Économisez 6 000 FCFA par rapport au tarif mensuel (-10%)
+                        Économisez 4 200 FCFA par rapport au tarif mensuel (-10%)
                       </div>
                     </div>
                   )}
                 </div>
                 <p className="mt-1 text-xs text-zinc-500">
                   {isEn
-                    ? 'For active businesses and customer service.'
-                    : 'Pour les entreprises actives et les services clients.'}
+                    ? 'For autonomous customer support, voice notes, and sales.'
+                    : 'Pour les professionnels voulant automatiser leur relation client sans limites.'}
                 </p>
 
                 <div className="mt-5 border-t border-zinc-100 pt-4 space-y-2 text-xs text-zinc-800">
@@ -1881,11 +1882,78 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
                     isEn ? 'Up to 2 WhatsApp AI agents' : 'Jusqu’à 2 agents IA WhatsApp',
                     isEn ? 'Up to 2 connected WhatsApp numbers' : 'Jusqu’à 2 numéros WhatsApp connectés',
                     isEn ? 'Multilingual FR & EN voice notes included (0 extra fee)' : 'Messages vocaux FR & EN compris (zéro surcoût)',
-                    isEn ? 'PDF, TXT, FAQ, and public website ingestion' : 'Ingestion PDF, TXT, FAQ et sites web',
-                    isEn ? 'Durable contact and conversation memory' : 'Mémoire durable du contact et conversation',
+                    isEn ? 'PDF, TXT, FAQ, and public website ingestion' : 'Ingestion PDF, TXT, FAQ et sites web (25 docs)',
+                    isEn ? 'Durable contact and conversation memory' : 'Mémoire durable contact & conversation',
                     isEn ? 'Unlimited conversations & replies (zero INNOICA quotas)' : 'Zéro quota quotidien de conversations INNOICA',
                     isEn ? 'Full history retention (no 7-day limit)' : 'Historique complet sans limitation de durée',
                     isEn ? 'Zero INNOICA advertising signature' : 'Zéro signature publicitaire INNOICA',
+                  ].map((f) => (
+                    <div key={f} className="flex items-center gap-2">
+                      <Check className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                      <span className="font-medium">{f}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Link
+                href={isAuthenticated ? '/subscription' : '/register'}
+                className="mt-6 block w-full rounded-lg bg-zinc-900 py-2.5 text-center text-xs font-medium text-white hover:bg-zinc-800 transition-colors shadow-2xs"
+              >
+                {isEn ? 'Choose INNOICA Agent' : 'Activer INNOICA Agent'}
+              </Link>
+            </div>
+
+            {/* INNOICA Commerce (6 500 FCFA) */}
+            <div className="rounded-xl border-2 border-emerald-600 bg-white p-6 shadow-sm flex flex-col justify-between hover-card-lift transition-all duration-200 ring-1 ring-emerald-600/20">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-emerald-800 font-mono">
+                    <ShoppingBag className="h-3.5 w-3.5 text-emerald-600" /> INNOICA Commerce
+                  </span>
+                  <span className="rounded bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-semibold font-mono">
+                    {isEn ? 'Store + AI' : 'Boutique & Vente'}
+                  </span>
+                </div>
+
+                <div className="mt-2">
+                  {billingCycle === 'monthly' ? (
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-semibold font-mono tabular-nums text-zinc-900">
+                        6 500 FCFA
+                      </span>
+                      <span className="text-xs text-zinc-500">/ {isEn ? 'month' : 'mois'}</span>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-3xl font-semibold font-mono tabular-nums text-zinc-900">
+                          70 200 FCFA
+                        </span>
+                        <span className="text-xs text-zinc-500">/ {isEn ? 'year' : 'an'}</span>
+                      </div>
+                      <div className="text-[11px] text-emerald-600 font-medium mt-0.5 font-mono">
+                        Économisez 7 800 FCFA par rapport au tarif mensuel (-10%)
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {isEn
+                    ? 'Everything in Agent + Native E-Commerce Storefront, Visual Builder & Orders.'
+                    : 'Tout INNOICA Agent + Moteur E-Commerce Natif, vitrine en ligne, catalogue et commandes.'}
+                </p>
+
+                <div className="mt-5 border-t border-zinc-100 pt-4 space-y-2 text-xs text-zinc-800">
+                  {[
+                    isEn ? 'Everything in INNOICA Agent plan' : 'Tout le forfait INNOICA Agent inclus',
+                    isEn ? 'Up to 3 WhatsApp AI agents & 3 numbers' : 'Jusqu’à 3 agents IA WhatsApp & 3 numéros',
+                    isEn ? 'Native hosted online storefront' : 'Boutique en ligne native hébergée par INNOICA',
+                    isEn ? 'No-code visual store builder' : 'Constructeur visuel sans code sécurisé',
+                    isEn ? 'Product catalog, variants & stock management' : 'Catalogue, variantes & gestion des stocks',
+                    isEn ? 'Real-time shopping carts & orders' : 'Paniers & commandes en temps réel',
+                    isEn ? 'Manual payments (COD, Pickup, Mobile Money)' : 'Paiements manuels (Livraison, Retrait, Mobile Money)',
+                    isEn ? 'WhatsApp catalog & order synchronization' : 'Synchronisation catalogue & commandes WhatsApp',
                   ].map((f) => (
                     <div key={f} className="flex items-center gap-2">
                       <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
@@ -1897,9 +1965,9 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
 
               <Link
                 href={isAuthenticated ? '/subscription' : '/register'}
-                className="mt-6 block w-full rounded-lg bg-zinc-900 py-2.5 text-center text-xs font-medium text-white hover:bg-zinc-800 transition-colors shadow-2xs"
+                className="mt-6 block w-full rounded-lg bg-emerald-600 py-2.5 text-center text-xs font-semibold text-white hover:bg-emerald-700 transition-colors shadow-2xs"
               >
-                {isEn ? 'Upgrade to Starter' : 'Activer l’offre Starter'}
+                {isEn ? 'Choose INNOICA Commerce' : 'Activer INNOICA Commerce'}
               </Link>
             </div>
           </div>

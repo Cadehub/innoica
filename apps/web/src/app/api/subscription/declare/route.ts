@@ -40,32 +40,41 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Non authentifié' }, { status: 401 });
     }
 
-    const { data: starterPlan, error: planErr } = await supabase
+    const { planSlug, billingCycle, paymentMethod, reference, paidAt, proofNote } = parseRes.data;
+    const targetSlug = planSlug || 'agent';
+
+    const { data: selectedPlan, error: planErr } = await supabase
       .from('plans')
-      .select('id, price_monthly_xaf, price_yearly_xaf')
-      .eq('slug', 'starter')
-      .eq('is_active', true)
+      .select('id, slug, name_fr, price_monthly_xaf, price_yearly_xaf, is_active')
+      .eq('slug', targetSlug)
       .single();
 
-    if (planErr || !starterPlan) {
+    if (planErr || !selectedPlan) {
       return NextResponse.json(
-        { success: false, error: 'Plan Starter introuvable en base de données.' },
-        { status: 500 }
+        { success: false, error: `Plan « ${targetSlug} » introuvable en base de données.` },
+        { status: 404 }
       );
     }
 
-    const { billingCycle, paymentMethod, reference, paidAt, proofNote } = parseRes.data;
+    // New subscriptions only allowed on active plans; starter allowed only for grandfathered renewals
+    if (!selectedPlan.is_active && targetSlug !== 'starter') {
+      return NextResponse.json(
+        { success: false, error: `Le plan ${selectedPlan.name_fr} n'est plus ouvert aux nouvelles souscriptions.` },
+        { status: 400 }
+      );
+    }
+
     const authoritativeAmount =
       billingCycle === 'yearly'
-        ? Number(starterPlan.price_yearly_xaf)
-        : Number(starterPlan.price_monthly_xaf);
+        ? Number(selectedPlan.price_yearly_xaf)
+        : Number(selectedPlan.price_monthly_xaf);
 
     const { data: declaration, error: insertErr } = await supabase
       .from('payment_declarations')
       .insert({
         workspace_id: ctx.workspace.id,
         submitted_by: ctx.user.id,
-        plan_id: starterPlan.id,
+        plan_id: selectedPlan.id,
         billing_cycle: billingCycle,
         amount_xaf: authoritativeAmount,
         payment_method: paymentMethod,

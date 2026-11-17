@@ -32,10 +32,11 @@ export interface WorkspaceMember {
   created_at: string;
 }
 
-export type PlanSlug = 'free' | 'starter';
+export type PlanSlug = 'free' | 'agent' | 'commerce' | 'starter';
 
 export interface PlanCapabilities {
   voice_message_understanding: boolean;
+  ecommerce_store: boolean;
   [key: string]: boolean | undefined;
 }
 
@@ -56,7 +57,7 @@ export type VoiceProcessingStatus =
   | 'completed'
   | 'failed';
 
-export type MessageType = 'text' | 'audio';
+export type MessageType = 'text' | 'audio' | 'image';
 
 export type SensitiveActionType =
   | 'order'
@@ -79,6 +80,15 @@ export interface VoiceMessageMetadata {
   extractedFacts?: string[];
   clarificationPrompt?: string | null;
   blockedReason?: 'free_plan' | 'no_speech' | 'unsupported' | 'processing_error' | null;
+  errorCode?: string | null;
+}
+
+export interface ImageMessageMetadata {
+  mimeType?: string | null;
+  fileSizeBytes?: number | null;
+  caption?: string | null;
+  isVisionSupported?: boolean;
+  processingStatus?: 'completed' | 'unsupported_model' | 'corrupted' | 'failed';
   errorCode?: string | null;
 }
 
@@ -338,6 +348,7 @@ export interface Message {
   sender_type: SenderType;
   message_type?: MessageType;
   voice_metadata?: VoiceMessageMetadata | null;
+  image_metadata?: ImageMessageMetadata | null;
   content: string;
   delivery_status: DeliveryStatus;
   created_at: string;
@@ -363,3 +374,5 @@ export interface ExecutionLog {
   details: Record<string, unknown>;
   created_at: string;
 }
+
+export * from './ecommerce';

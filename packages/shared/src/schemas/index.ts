@@ -105,9 +105,10 @@ export const knowledgeUrlSchema = z.object({
 });
 
 /**
- * Schéma pour la déclaration manuelle de paiement Starter (Mensuel ou Annuel)
+ * Schéma pour la déclaration manuelle de paiement (Agent, Commerce ou Starter)
  */
 export const paymentDeclarationSchema = z.object({
+  planSlug: z.enum(['agent', 'commerce', 'starter']).default('agent'),
   billingCycle: z.enum(['monthly', 'yearly']),
   paymentMethod: z
     .string()
@@ -135,7 +136,7 @@ export const adminPaymentDecisionSchema = z.object({
  * Schéma Admin de mise à jour des limites d'un plan
  */
 export const adminPlanConfigSchema = z.object({
-  slug: z.enum(['free', 'starter']),
+  slug: z.enum(['free', 'agent', 'commerce', 'starter']),
   price_monthly_xaf: z.number().min(0).max(10000000),
   price_yearly_xaf: z.number().min(0).max(100000000),
   max_agents: z.number().int().min(1).max(100),
@@ -147,7 +148,8 @@ export const adminPlanConfigSchema = z.object({
   has_watermark: z.boolean(),
   capabilities: z
     .object({
-      voice_message_understanding: z.boolean(),
+      voice_message_understanding: z.boolean().optional(),
+      ecommerce_store: z.boolean().optional(),
     })
     .optional(),
 });
@@ -177,3 +179,5 @@ export const changeControlModeSchema = z.object({
   conversationId: z.string().uuid(),
   controlMode: z.enum(['ai_active', 'human_takeover', 'paused']),
 });
+
+export * from './ecommerce';

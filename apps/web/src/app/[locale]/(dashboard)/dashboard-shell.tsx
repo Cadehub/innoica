@@ -19,9 +19,11 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Globe,
+  ShoppingBag,
 } from 'lucide-react';
 import { BrandLogo } from '@/components/brand-logo';
 import { PWAInstaller } from '@/components/pwa-installer';
+import { PlanSlug } from '@innoica/shared';
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -37,7 +39,7 @@ interface DashboardShellProps {
     slug: string;
     status?: string;
   } | null;
-  planSlug?: 'free' | 'starter';
+  planSlug?: PlanSlug;
   locale?: 'fr' | 'en';
 }
 
@@ -61,6 +63,7 @@ export function DashboardShell({
     { href: '/agents', label: locale === 'en' ? 'Agents' : 'Mes Agents', icon: Bot },
     { href: '/conversations', label: 'Inbox WhatsApp', icon: MessageSquare },
     { href: '/whatsapp', label: locale === 'en' ? 'WhatsApp Links' : 'Connexions WA', icon: Smartphone },
+    { href: '/store', label: locale === 'en' ? 'My Store' : 'Ma boutique', icon: ShoppingBag },
     { href: '/knowledge', label: locale === 'en' ? 'Knowledge' : 'Connaissances', icon: BookOpen },
     { href: '/ai-credentials', label: locale === 'en' ? 'AI Keys (BYOK)' : 'Clés IA (BYOK)', icon: Sparkles },
     { href: '/subscription', label: locale === 'en' ? 'Plan & Quotas' : 'Abonnement', icon: CreditCard },

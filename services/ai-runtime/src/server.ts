@@ -28,8 +28,14 @@ export function createAIRuntimeServer(orchestrator: AIOrchestrator): FastifyInst
       contactPhoneNumber: string;
       replyJid?: string;
       incomingMessage: string;
-      incomingMessageType?: 'text' | 'audio';
+      incomingMessageType?: 'text' | 'audio' | 'image';
       voiceContext?: Record<string, unknown>;
+      imageContext?: {
+        mimeType: string;
+        base64Data?: string;
+        caption?: string;
+        isCorrupted?: boolean;
+      };
       idempotencyKey?: string;
     };
   }>('/api/generate-response', async (request, reply) => {
@@ -41,11 +47,13 @@ export function createAIRuntimeServer(orchestrator: AIOrchestrator): FastifyInst
       incomingMessage,
       incomingMessageType,
       voiceContext,
+      imageContext,
       idempotencyKey,
     } = request.body;
 
     const isAudio = incomingMessageType === 'audio';
-    if (!agentId || !conversationId || !contactPhoneNumber || (!incomingMessage && !isAudio)) {
+    const isImage = incomingMessageType === 'image';
+    if (!agentId || !conversationId || !contactPhoneNumber || (!incomingMessage && !isAudio && !isImage)) {
       return reply.status(400).send({
         error: 'Champs obligatoires manquants (agentId, conversationId, contactPhoneNumber, incomingMessage)',
       });
@@ -60,6 +68,7 @@ export function createAIRuntimeServer(orchestrator: AIOrchestrator): FastifyInst
         incomingMessage: incomingMessage || '',
         ...(incomingMessageType ? { incomingMessageType } : {}),
         ...(voiceContext !== undefined ? { voiceContext: voiceContext as any } : {}),
+        ...(imageContext !== undefined ? { imageContext: imageContext as any } : {}),
         ...(idempotencyKey !== undefined ? { idempotencyKey } : {}),
       });
 
