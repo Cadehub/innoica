@@ -22,6 +22,7 @@ import {
   Radio,
   FileText,
   HelpCircle,
+  Pencil,
 } from 'lucide-react';
 import {
   ActionType,
@@ -81,6 +82,14 @@ export function AutomationsClient({
   const [compileResult, setCompileResult] = useState<NaturalInstructionCompileResult | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Edit Automation State
+  const [editingWorkflow, setEditingWorkflow] = useState<WorkflowDefinition | null>(null);
+  const [editInstruction, setEditInstruction] = useState('');
+  const [editName, setEditName] = useState('');
+  const [editCompiling, setEditCompiling] = useState(false);
+  const [editCompileResult, setEditCompileResult] = useState<NaturalInstructionCompileResult | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Visual Builder Draft State
   const [builderName, setBuilderName] = useState('');
@@ -215,6 +224,82 @@ export function AutomationsClient({
     } catch {
       // Ignorer
     }
+  };
+
+  // Démarrer l'édition d'une automatisation
+  const handleStartEdit = (wf: WorkflowDefinition) => {
+    setEditingWorkflow(wf);
+    setEditInstruction(wf.natural_instruction || wf.name || '');
+    setEditName(wf.name || '');
+    setEditCompileResult(null);
+  };
+
+  // Recompiler la consigne éditée
+  const handleEditCompile = async () => {
+    if (!editInstruction.trim()) return;
+    setEditCompiling(true);
+    setEditCompileResult(null);
+    try {
+      const res = await fetch('/api/automations/compile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instruction: editInstruction,
+          agentId: editingWorkflow?.agent_id || selectedAgentId || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Échec de compilation de la consigne');
+      }
+      setEditCompileResult(data);
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Erreur d’analyse de la consigne' });
+    } finally {
+      setEditCompiling(false);
+    }
+  };
+
+  // Sauvegarder les modifications apportées à l'automatisation
+  const handleSaveEdit = async () => {
+    if (!editingWorkflow) return;
+    setIsUpdating(true);
+    try {
+      const res = await fetch(`/api/automations/${editingWorkflow.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editName.trim() || undefined,
+          natural_instruction: editInstruction.trim(),
+          recompile: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Erreur lors de la mise à jour');
+      }
+      setWorkflows((prev) =>
+        prev.map((w) => (w.id === editingWorkflow.id ? data.workflow : w))
+      );
+      setFeedback({ type: 'success', message: 'Consigne et automatisation mises à jour avec succès !' });
+      setEditingWorkflow(null);
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Échec de la sauvegarde' });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Charger dans le compilateur principal
+  const handleLoadInCompiler = (wf: WorkflowDefinition) => {
+    setNaturalInstruction(wf.natural_instruction || wf.name || '');
+    if (wf.agent_id) setSelectedAgentId(wf.agent_id);
+    setActiveTab('nlp');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setFeedback({
+      type: 'success',
+      message: 'Consigne chargée dans le compilateur. Modifiez-la et compilez pour générer une nouvelle version.',
+    });
   };
 
   // Traiter une approbation humaine
@@ -617,6 +702,16 @@ export function AutomationsClient({
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       type="button"
+                      onClick={() => handleStartEdit(wf)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50 transition-colors shadow-2xs"
+                      title="Modifier la consigne et le comportement"
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-zinc-600" />
+                      <span>Modifier</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => handleToggleStatus(wf)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                         wf.status === 'active'
@@ -640,6 +735,120 @@ export function AutomationsClient({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Modal d'édition d'une automatisation */}
+      {editingWorkflow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-2xl rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl space-y-5 animate-in fade-in-50 zoom-in-95">
+            <div className="flex items-start justify-between border-b border-zinc-100 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-semibold text-zinc-950">
+                    Modifier l'automatisation
+                  </h3>
+                  <span className="rounded bg-zinc-100 border border-zinc-200 px-2 py-0.5 text-[10px] font-mono text-zinc-700">
+                    {editingWorkflow.domain}
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  Ajustez l'instruction en langage naturel ci-dessous. Le compilateur recalculera les étapes et les actions.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingWorkflow(null)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1">
+                  Nom du scénario
+                </label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 p-2.5 text-xs text-zinc-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                  placeholder="Nom descriptif..."
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-zinc-700">
+                    Consigne en langage naturel
+                  </label>
+                  <span className="text-[11px] text-zinc-400">
+                    Précisez les conditions, le numéro de téléphone ou l'action attendue
+                  </span>
+                </div>
+                <textarea
+                  rows={4}
+                  value={editInstruction}
+                  onChange={(e) => setEditInstruction(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-zinc-900 font-sans"
+                  placeholder="Écrivez votre consigne modifiée..."
+                />
+              </div>
+
+              {/* Prévisualisation recompilée si disponible */}
+              {editCompileResult?.workflow && (
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-3.5 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-zinc-900">Aperçu du scénario recalculé</span>
+                    <span className="font-mono text-[10px] text-zinc-500">
+                      {editCompileResult.workflow.steps?.length || 0} étape(s)
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    {editCompileResult.workflow.steps?.map((step: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-1.5 text-zinc-700 font-mono text-[11px]">
+                        <span className="text-zinc-400">#{idx + 1}</span>
+                        <span className="font-medium text-zinc-900">{step.name}</span>
+                        <span className="text-zinc-400">({step.action_type})</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between border-t border-zinc-100 pt-4">
+              <button
+                type="button"
+                onClick={() => handleLoadInCompiler(editingWorkflow)}
+                className="text-xs text-zinc-600 hover:text-zinc-900 hover:underline flex items-center gap-1 font-medium"
+              >
+                <span>Ouvrir dans le studio complet</span>
+                <ArrowRight className="h-3 w-3" />
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleEditCompile}
+                  disabled={editCompiling || !editInstruction.trim()}
+                  className="rounded-xl border border-zinc-200 bg-zinc-100 hover:bg-zinc-200 px-3.5 py-2 text-xs font-medium text-zinc-800 transition-colors disabled:opacity-50"
+                >
+                  {editCompiling ? 'Analyse...' : 'Tester la consigne'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEdit}
+                  disabled={isUpdating || !editInstruction.trim()}
+                  className="rounded-xl bg-zinc-900 hover:bg-zinc-800 px-4 py-2 text-xs font-medium text-white transition-colors disabled:opacity-50"
+                >
+                  {isUpdating ? 'Enregistrement...' : 'Enregistrer les modifications'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
