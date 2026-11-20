@@ -83,7 +83,8 @@ describe('INNOICA WhatsApp Agents v2.0 — End-to-End System Invariants', () => 
     it('detects tampering and rejects corrupted ciphertext with authentication error', () => {
       const encrypted = encryptSecret('test-secret', Buffer.from(masterKey, 'hex'));
       const parts = encrypted.split(':');
-      const tampered = `${parts[0]}:${parts[1]}:${parts[2].slice(0, -2)}ff`;
+      const tamperedTag = parts[1].startsWith('aa') ? `bb${parts[1].slice(2)}` : `aa${parts[1].slice(2)}`;
+      const tampered = `${parts[0]}:${tamperedTag}:${parts[2]}`;
 
       expect(() => decryptSecret(tampered, Buffer.from(masterKey, 'hex'))).toThrow();
     });

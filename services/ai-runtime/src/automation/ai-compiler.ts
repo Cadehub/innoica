@@ -141,7 +141,7 @@ export class AIWorkflowCompiler {
       const validatedWorkflow = CreateWorkflowSchema.safeParse({
         name: parsedJson.name || fallback.workflow?.name,
         description: parsedJson.description || null,
-        agent_id: options.agentId || null,
+        agent_id: options?.agentId || null,
         domain: parsedJson.domain || fallback.detectedDomain,
         natural_instruction: instruction,
         trigger_type: parsedJson.trigger_type || fallback.workflow?.trigger_type,

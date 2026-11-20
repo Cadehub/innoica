@@ -338,7 +338,7 @@ export class AutomationEngine {
 
         execution.status = 'waiting';
         execution.current_step_index = currentIndex;
-        execution.waiting_context = result.waitingContext;
+        execution.waiting_context = result.waitingContext as any;
         execution.expected_sender_phone = expectedPhone;
         execution.correlation_id = correlationKey;
         execution.variables = variables;
