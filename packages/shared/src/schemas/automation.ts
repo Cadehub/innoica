@@ -141,7 +141,9 @@ export const WhatsAppGroupConfigSchema = z.object({
   group_jid: z.string().regex(/@g\.us$/, 'Le JID doit être un identifiant de groupe (@g.us)'),
   group_name: z.string().min(1),
   is_active: z.boolean().default(false),
-  monitor_mode: z.enum(['mentions_only', 'keywords_only', 'all_messages']).default('mentions_only'),
+  monitor_mode: z
+    .enum(['mentions_only', 'keywords_only', 'all_messages', 'smart_needed'])
+    .default('smart_needed'),
   keywords: z.array(z.string()).default([]),
   custom_instructions: z.string().optional().nullable(),
   allow_admin_actions: z.boolean().default(false),

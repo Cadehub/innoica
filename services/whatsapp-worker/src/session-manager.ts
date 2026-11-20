@@ -63,8 +63,6 @@ export class WhatsAppSessionManager {
     if (!jid) return true;
     return (
       jid === 'status@broadcast' ||
-      jid.endsWith('@g.us') ||
-      jid.endsWith('@newsletter') ||
       jid.endsWith('@broadcast')
     );
   }

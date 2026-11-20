@@ -14,6 +14,67 @@ import {
 import { createWorkerSupabaseClient } from '@innoica/database';
 import { ActionRegistry } from './action-registry.js';
 
+// Detecteur strict d'intention pour éviter les faux déclenchements intempestifs
+export function detectInboundMessageIntent(
+  rawText: string
+): 'product_availability' | 'absence_report' | 'complaint' | 'greeting' | 'general' {
+  const text = (rawText || '').trim().toLowerCase();
+  if (!text) return 'general';
+
+  // 1. Détection de mécontentement ou réclamation explicite
+  const isComplaint =
+    /(?:m[ée]content|insatisfait|arnaque|escroc|voleur|inacceptable|remboursez|remboursement|plainte|service pourri|d[ée]çu|scandaleux)/i.test(
+      text
+    );
+  if (isComplaint) {
+    return 'complaint';
+  }
+
+  // 2. Détection d'absence / RH
+  const isAbsence =
+    /(?:absent|absence|malade|maladie|cong[ée]|retard|empêchement|empechement|ne pourrai(?:s)? pas venir|ne viens pas|pas venir au travail|arriverai en retard)/i.test(
+      text
+    );
+  if (isAbsence) {
+    return 'absence_report';
+  }
+
+  // 3. Détection de demande de produit / disponibilité / stock / prix
+  // Doit comporter des signaux d'intention explicites d'achat, de disponibilité ou de tarification
+  const hasAvailabilityKeywords =
+    /(?:disponible|disponibilit[ée]|en stock|rupture(?: de stock)?|reste[- ]t[- ]il|avez[- ]vous du stock|vous avez du stock)/i.test(
+      text
+    );
+  const hasPriceKeywords =
+    /(?:combien (?:coute|coûte|ça coute|ça coûte|c['’]est)|quel est le prix|le prix de|prix du|tarif de|c['’]est à combien)/i.test(
+      text
+    );
+  const hasCatalogOrPurchase =
+    /(?:avez[- ]vous (?:un|une|des|le|la|les|ce|cette|du|de la|\d+)|vous avez (?:un|une|des|le|la|les|ce|cette|du|de la|\d+)|je cherche (?:un|une|des|le|la|les|ce|cette|du|de la)|je voudrais commander|je veux commander|je souhaite commander|je veux acheter|je souhaite acheter|je voudrais acheter|acheter (?:un|une|des|le|la|les|ce|cette)|commander (?:un|une|des|le|la|les|ce|cette)|vendez[- ]vous|catalogue des)/i.test(
+      text
+    );
+  const isDirectProductKeyword =
+    /^(?:disponible\??|en stock\??|le prix\??|combien\??|catalogue\??)$/i.test(text);
+
+  if (hasAvailabilityKeywords || hasPriceKeywords || hasCatalogOrPurchase || isDirectProductKeyword) {
+    return 'product_availability';
+  }
+
+  // 4. Salutations et politesses pures (si aucune intention produit/absence/plainte n'a matché)
+  const greetingTokensRemoved = text
+    .replace(
+      /(?:merci beaucoup|bonne journ[ée]e|bonne soir[ée]e|comment (?:vas[- ]tu|tu vas|allez[- ]vous|vous allez)|à bientôt|a bientot|au revoir|bien reçu|c['’]est qui|qui est[- ]ce|d['’]?accord|bonjour|bonsoir|salut|hello|hi|hey|coucou|yo|merci|ok|daccord|dac|not[ée]|super|parfait|ça va|ca va|bye|a\+?|à plus)/gi,
+      ''
+    )
+    .replace(/[\s.!,?-]/g, '');
+
+  if (greetingTokensRemoved.length === 0) {
+    return 'greeting';
+  }
+
+  return 'general';
+}
+
 export class AutomationEngine {
   private supabase = createWorkerSupabaseClient();
   private actionRegistry = new ActionRegistry();
@@ -41,43 +102,16 @@ export class AutomationEngine {
     const target = condition.value;
 
     // Déduction intelligente de l'intention s'il s'agit d'un message brut sans métadonnées
-    if (condition.field === 'message.intent' && val === undefined) {
+    if (condition.field === 'message.intent' && (val === undefined || val === null || val === '')) {
       const msgText = String(
         (variables.message as Record<string, unknown>)?.text ||
         (variables.trigger as Record<string, unknown>)?.messageText ||
         ''
-      ).toLowerCase();
-
-      if (target === 'product_availability') {
-        const isProductQuery =
-          /(?:produit|article|disponible|disponibilité|dispo|stock|taille|prix|combien|coûte|coute|vendez|acheter|avez[- ]vous|catalogue|modèle|modele)/i.test(
-            msgText
-          ) ||
-          msgText.includes('?') ||
-          msgText.length > 3;
-        if (isProductQuery) {
-          val = 'product_availability';
-        }
-      } else if (target === 'absence_report') {
-        const isAbsence =
-          /(?:absent|absence|malade|maladie|congé|conge|retard|empêchement|empechement|ne pourrai pas|ne viens pas)/i.test(
-            msgText
-          );
-        if (isAbsence) {
-          val = 'absence_report';
-        }
-      } else if (target === 'complaint') {
-        const isComplaint =
-          /(?:mécontent|mecontent|insatisfait|remboursement|problème|probleme|plainte|déçu|decu|réclamation|reclamation|arnaque)/i.test(
-            msgText
-          );
-        if (isComplaint) {
-          val = 'complaint';
-        }
-      }
-    } else if (condition.field === 'message.sentiment' && val === undefined) {
+      );
+      val = detectInboundMessageIntent(msgText);
+    } else if (condition.field === 'message.sentiment' && (val === undefined || val === null || val === '')) {
       const msgText = String((variables.message as Record<string, unknown>)?.text || '').toLowerCase();
-      if (/(?:mécontent|mecontent|insatisfait|colère|colere|remboursement|plainte|déçu|nul|mauvais|incompétent)/i.test(msgText)) {
+      if (/(?:m[ée]content|insatisfait|colère|colere|remboursement|plainte|d[ée]çu|nul|mauvais|incompétent)/i.test(msgText)) {
         val = 'negative';
       } else {
         val = 'neutral';
@@ -137,6 +171,28 @@ export class AutomationEngine {
     payload: Record<string, unknown>,
     idempotencyKey?: string
   ): Promise<WorkflowExecution[]> {
+    // 0. Vérifier d'abord si ce message entrant résout un workflow en attente (ex: réponse du fournisseur)
+    const senderPhone = String(
+      (payload.contact as Record<string, unknown>)?.phone ||
+      payload.contactPhoneNumber ||
+      (payload.sender as Record<string, unknown>)?.phone ||
+      ''
+    );
+    const messageText = String(
+      (payload.message as Record<string, unknown>)?.text ||
+      payload.messageText ||
+      payload.textContent ||
+      ''
+    );
+
+    if (agentId && senderPhone && (triggerType === 'wa_private_message_received' || triggerType === 'wa_group_message_received')) {
+      const resumedCount = await this.checkAndResumeWaitingWorkflows(agentId, senderPhone, messageText);
+      if (resumedCount > 0) {
+        // Le message a été consommé par une exécution en attente qui a repris. Ne pas redéclencher un nouveau workflow.
+        return [];
+      }
+    }
+
     // 1. Récupérer les workflows actifs correspondant à ce déclencheur
     const { data: workflows, error } = await this.supabase
       .from('workflow_definitions')

@@ -907,49 +907,135 @@ export class WhatsAppMessageHandler {
       if (!isAllowed) return;
     }
 
-    // 3. Vérifier le mode de surveillance (mentions_only, keywords_only, all_messages)
+    // 3. Détection de la pertinence de réponse
     let shouldRespond = false;
     let triggerType = 'wa_group_message_received';
+
+    const isMentioned = mentions.length > 0 || textContent.includes('@');
+    const matchedKeyword = (config.keywords || []).find((kw: string) =>
+      textContent.toLowerCase().includes(kw.toLowerCase())
+    );
 
     if (config.monitor_mode === 'all_messages') {
       shouldRespond = true;
     } else if (config.monitor_mode === 'keywords_only') {
-      const matched = (config.keywords || []).some((kw: string) =>
-        textContent.toLowerCase().includes(kw.toLowerCase())
-      );
-      if (matched) {
+      if (matchedKeyword) {
         shouldRespond = true;
         triggerType = 'wa_group_keyword_matched';
       }
-    } else {
-      // Par défaut : mentions_only
-      const isMentioned = mentions.length > 0 || textContent.includes('@');
+    } else if (config.monitor_mode === 'mentions_only') {
       if (isMentioned) {
         shouldRespond = true;
         triggerType = 'wa_group_bot_mentioned';
+      }
+    } else {
+      // Mode par défaut et recommandé : 'smart_needed' (Intervention uniquement quand nécessaire)
+      // A. Mention explicite du bot
+      if (isMentioned) {
+        shouldRespond = true;
+        triggerType = 'wa_group_bot_mentioned';
+      }
+      // B. Mot-clé configuré présent
+      else if (matchedKeyword) {
+        shouldRespond = true;
+        triggerType = 'wa_group_keyword_matched';
+      } else {
+        // C. Détection intelligente de questions ou demandes d'assistance substantielles
+        const cleanText = textContent.trim();
+        const lower = cleanText.toLowerCase();
+
+        // Ignorer le bruit casual (emojis, rires, acclamations, acquiescements isolés)
+        const isNoise =
+          cleanText.length < 3 ||
+          /^(?:ok|d['’]?accord|daccord|merci|merci beaucoup|haha|hahaha|mdr|lol|super|cool|top|parfait|bien|yes|oui|non|c['’]est bon|not[ée]|amen)[\s.!?,]*$/i.test(
+            lower
+          );
+
+        if (!isNoise) {
+          const hasQuestion = cleanText.includes('?') && cleanText.length >= 6;
+          const hasInterrogativePhrase =
+            /(?:est[- ]ce que|comment|pourquoi|o[uù] (?:est|sont|se trouve)|combien|qui peut|qui a|avez[- ]vous|quel|quelle|quels|quelles|savez[- ]vous|pouvez[- ]vous|y a[- ]t[- ]il|c['’]est quoi|qu['’]est[- ]ce)/i.test(
+              lower
+            );
+          const hasHelpRequest =
+            /(?:besoin d['’]aide|aidez[- ]moi|au secours|qui m['’]aide|assistance|urgent|renseignement|information svp|probl[èe]me)/i.test(
+              lower
+            );
+
+          if (hasQuestion || hasInterrogativePhrase || hasHelpRequest) {
+            shouldRespond = true;
+            triggerType = 'wa_group_question_detected';
+          }
+        }
       }
     }
 
     if (!shouldRespond) return;
 
-    // Déclencher le moteur d'automatisation
+    // 4. Exécution : Vérifier d'abord les flux d'automatisation
+    let handledByWaitingAutomation = false;
     try {
-      await fetch(`${this.aiRuntimeEndpoint}/api/automation/dispatch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          workspaceId: config.workspace_id,
-          agentId,
-          triggerType,
-          payload: {
-            group: { jid: groupJid, name: config.group_name },
-            sender: { phone: participantPhone, jid: participantJid, pushName: msg.pushName },
-            message: { text: textContent, id: msg.key?.id },
-          },
-        }),
+      const autoRes = await this.dispatchAutomation({
+        workspaceId: config.workspace_id,
+        agentId,
+        triggerType,
+        payload: {
+          group: { jid: groupJid, name: config.group_name },
+          sender: { phone: participantPhone, jid: participantJid, pushName: msg.pushName },
+          message: { text: textContent, id: msg.key?.id },
+          contactPhoneNumber: participantPhone,
+        },
+        idempotencyKey: `grp:auto:${msg.key?.id || Date.now()}`,
       });
+
+      if (autoRes.hasWaitingWorkflow || autoRes.executionsCount > 0) {
+        handledByWaitingAutomation = true;
+      }
     } catch (err) {
       console.error('[WA-Worker] Erreur dispatch automation groupe:', err);
+    }
+
+    // 5. Si aucune automatisation programmable ne s'en charge, faire répondre l'IA conversationnelle
+    if (!handledByWaitingAutomation) {
+      try {
+        const { data: ingestRes, error: ingestErr } = await this.supabase.rpc('worker_ingest_inbound_message', {
+          p_agent_id: agentId,
+          p_contact_phone: groupJid,
+          p_push_name: config.group_name || 'Groupe WhatsApp',
+          p_wa_message_id: msg.key?.id || '',
+          p_content: textContent,
+          p_worker_secret: process.env.WORKER_INTERNAL_SECRET || null,
+        });
+
+        if (ingestErr || !ingestRes || !ingestRes.ok) {
+          console.error('[WA-Worker] Erreur ingestion message de groupe:', ingestErr || ingestRes);
+          return;
+        }
+
+        if (ingestRes.controlMode === 'human_takeover' || ingestRes.controlMode === 'paused') {
+          console.info(`[WA-Worker] Groupe ${groupJid} en mode ${ingestRes.controlMode}. L'IA n'intervient pas.`);
+          return;
+        }
+
+        const senderName = msg.pushName ? `${msg.pushName} (${participantPhone})` : participantPhone;
+        const customRules = config.custom_instructions ? `\n[Consignes spécifiques du groupe] : ${config.custom_instructions}` : '';
+        const formattedMessage = `[Message dans le groupe WhatsApp "${config.group_name}" de la part de ${senderName}]\n${textContent}${customRules}\n(Consigne: Réponds de manière utile, concise et respectueuse à cette intervention dans le groupe).`;
+
+        await this.dispatchToAiRuntime(
+          {
+            agentId,
+            conversationId: ingestRes.conversationId,
+            contactPhoneNumber: participantPhone,
+            replyJid: groupJid,
+            incomingMessage: formattedMessage,
+            incomingMessageType: 'text',
+            idempotencyKey: `grp:${msg.key?.id || Date.now()}`,
+          },
+          config.workspace_id
+        );
+      } catch (aiErr) {
+        console.error('[WA-Worker] Erreur dispatch IA pour groupe:', aiErr);
+      }
     }
   }
 }

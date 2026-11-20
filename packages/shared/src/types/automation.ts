@@ -204,7 +204,7 @@ export interface WhatsAppGroupConfig {
   group_jid: string;
   group_name: string;
   is_active: boolean;
-  monitor_mode: 'mentions_only' | 'keywords_only' | 'all_messages';
+  monitor_mode: 'mentions_only' | 'keywords_only' | 'all_messages' | 'smart_needed';
   keywords: string[];
   custom_instructions: string | null;
   allow_admin_actions: boolean;

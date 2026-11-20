@@ -629,8 +629,11 @@ export function WhatsAppPageClient({
                           }}
                           className="w-full rounded-lg border border-zinc-200 bg-zinc-50 p-2 text-xs text-zinc-800"
                         >
+                          <option value="smart_needed">
+                            Intelligent — Répondre quand nécessaire (questions, aide, mentions)
+                          </option>
                           <option value="mentions_only">
-                            Mentions uniquement (@bot) — Recommandé
+                            Mentions uniquement (@bot)
                           </option>
                           <option value="keywords_only">
                             Mots-clés déclencheurs uniquement

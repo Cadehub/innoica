@@ -6,7 +6,7 @@ import {
   WorkflowCondition,
 } from '../packages/shared/src/index';
 import { ActionRegistry } from '../services/ai-runtime/src/automation/action-registry.js';
-import { AutomationEngine } from '../services/ai-runtime/src/automation/engine.js';
+import { AutomationEngine, detectInboundMessageIntent } from '../services/ai-runtime/src/automation/engine.js';
 
 describe('INNOICA Programmable Agents & Universal Automation Suite', () => {
   describe('Phase 1 & 2: Natural Language Instruction Compiler', () => {
@@ -123,6 +123,58 @@ describe('INNOICA Programmable Agents & Universal Automation Suite', () => {
       const output = actionRegistry.interpolateString(template, vars);
 
       expect(output).toBe('Bonjour Mireille, le produit est Disponible au prix de 12 000 FCFA.');
+    });
+
+    it('strictly distinguishes greetings from product inquiries to avoid false triggers', () => {
+      // Les salutations et politesses simples doivent être classées en greeting
+      expect(detectInboundMessageIntent('Bonjour')).toBe('greeting');
+      expect(detectInboundMessageIntent('Salut comment tu vas ?')).toBe('greeting');
+      expect(detectInboundMessageIntent('Merci')).toBe('greeting');
+      expect(detectInboundMessageIntent('Ok')).toBe('greeting');
+      expect(detectInboundMessageIntent('Où êtes-vous situés ?')).toBe('general');
+
+      // Les demandes de produits / disponibilité / prix doivent être classées en product_availability
+      expect(detectInboundMessageIntent('Bonjour, avez-vous le polo blanc en taille L ?')).toBe('product_availability');
+      expect(detectInboundMessageIntent('Est-ce disponible ?')).toBe('product_availability');
+      expect(detectInboundMessageIntent('Avez-vous du stock ?')).toBe('product_availability');
+      expect(detectInboundMessageIntent('Combien coûte la veste ?')).toBe('product_availability');
+      expect(detectInboundMessageIntent('Quel est le prix du sac ?')).toBe('product_availability');
+      expect(detectInboundMessageIntent('Je cherche des chaussures taille 42')).toBe('product_availability');
+
+      // Vérification que les salutations n'activent PAS la condition d'automatisation
+      const condAvailability: WorkflowCondition = {
+        field: 'message.intent',
+        operator: 'contains',
+        value: 'product_availability',
+      };
+
+      // Message "Bonjour" -> condition FALSE
+      expect(
+        engine.evaluateCondition(condAvailability, {
+          message: { text: 'Bonjour' },
+        })
+      ).toBe(false);
+
+      // Message "Merci beaucoup" -> condition FALSE
+      expect(
+        engine.evaluateCondition(condAvailability, {
+          message: { text: 'Merci beaucoup' },
+        })
+      ).toBe(false);
+
+      // Message "Où êtes-vous ?" -> condition FALSE
+      expect(
+        engine.evaluateCondition(condAvailability, {
+          message: { text: 'Où êtes-vous ?' },
+        })
+      ).toBe(false);
+
+      // Message "Bonjour, est-ce que le polo est disponible ?" -> condition TRUE
+      expect(
+        engine.evaluateCondition(condAvailability, {
+          message: { text: 'Bonjour, est-ce que le polo est disponible ?' },
+        })
+      ).toBe(true);
     });
   });
 
