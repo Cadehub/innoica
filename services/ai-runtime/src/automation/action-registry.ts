@@ -58,6 +58,7 @@ export class ActionRegistry {
         const recipientPhone =
           this.interpolateString((payload.recipient_phone as string) || '', variables) ||
           (variables.contact as Record<string, unknown>)?.phone ||
+          (variables.client as Record<string, unknown>)?.phone ||
           (variables.sender as Record<string, unknown>)?.phone;
 
         if (!agentId || !recipientPhone || !text) {
@@ -137,11 +138,18 @@ export class ActionRegistry {
       case 'send_supplier_inquiry': {
         const inquiryText = this.interpolateString((payload.template as string) || 'Demande de disponibilité', variables);
         const supplierPhone =
-          this.interpolateString((payload.supplier_phone as string) || '', variables) ||
-          process.env.DEFAULT_SUPPLIER_PHONE ||
-          '+237600000000';
+          this.interpolateString(
+            (payload.supplier_phone as string) ||
+            (payload.recipient_phone as string) ||
+            (payload.phone as string) ||
+            '',
+            variables
+          ) ||
+          process.env.DEFAULT_SUPPLIER_PHONE;
 
-        if (!agentId) return { success: false, error: 'Agent ID manquant pour send_supplier_inquiry' };
+        if (!agentId || !supplierPhone) {
+          return { success: false, error: 'Agent ID ou numéro de fournisseur manquant pour send_supplier_inquiry' };
+        }
 
         try {
           const res = await fetch(`${whatsappWorkerUrl}/api/sessions/${agentId}/send`, {
@@ -152,37 +160,71 @@ export class ActionRegistry {
               text: `[INNOICA Fournisseur] ${inquiryText}`,
             }),
           });
-          return { success: res.ok, output: { contacted_supplier: supplierPhone, inquiryText } };
+          const sendData = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+          return { success: res.ok, output: { contacted_supplier: supplierPhone, inquiryText, sendResult: sendData } };
         } catch (err: unknown) {
           return { success: false, error: `Erreur contact fournisseur: ${(err as Error).message}` };
         }
       }
 
-      // 5. Notifier le responsable / propriétaire
+      // 5. Notifier le responsable / tiers spécifié
       case 'notify_manager': {
         const title = this.interpolateString((payload.title as string) || 'Alerte Agent', variables);
         const summary = this.interpolateString((payload.summary as string) || '', variables);
+        const targetPhone = this.interpolateString(
+          (payload.recipient_phone as string) ||
+          (payload.phone as string) ||
+          (payload.manager_phone as string) ||
+          '',
+          variables
+        );
 
-        // Récupérer le numéro du propriétaire du workspace
-        const { data: ws } = await this.supabase
-          .from('workspaces')
-          .select('owner_id')
-          .eq('id', context.workspaceId)
-          .single();
+        let finalPhone = targetPhone;
 
-        let ownerPhone = '';
-        if (ws?.owner_id) {
-          const { data: profile } = await this.supabase
-            .from('profiles')
-            .select('email')
-            .eq('id', ws.owner_id)
+        if (!finalPhone) {
+          // Récupérer le numéro du propriétaire du workspace
+          const { data: ws } = await this.supabase
+            .from('workspaces')
+            .select('owner_id')
+            .eq('id', context.workspaceId)
             .single();
-          ownerPhone = profile?.email || '';
+
+          if (ws?.owner_id) {
+            const { data: profile } = await this.supabase
+              .from('profiles')
+              .select('phone, full_name, email')
+              .eq('id', ws.owner_id)
+              .single();
+            finalPhone = profile?.phone || '';
+          }
+        }
+
+        if (agentId && finalPhone) {
+          try {
+            const sendRes = await fetch(`${whatsappWorkerUrl}/api/sessions/${agentId}/send`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                toPhone: String(finalPhone),
+                text: `[INNOICA Alerte Responsable]\n*${title}*\n\n${summary}`,
+              }),
+            });
+            const sendData = (await sendRes.json().catch(() => ({}))) as Record<string, unknown>;
+            return {
+              success: sendRes.ok,
+              output: { notified: sendRes.ok, title, summary, recipient: finalPhone, sendResult: sendData },
+            };
+          } catch (err: unknown) {
+            return {
+              success: false,
+              error: `Échec envoi WhatsApp manager: ${(err as Error).message}`,
+            };
+          }
         }
 
         return {
           success: true,
-          output: { notified: true, title, summary, owner: ownerPhone },
+          output: { notified: true, title, summary, recipient: finalPhone || 'non_renseigné' },
         };
       }
 

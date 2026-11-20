@@ -128,6 +128,38 @@ export class WhatsAppMessageHandler {
     }
   }
 
+  private async dispatchAutomation(params: {
+    workspaceId: string;
+    agentId: string;
+    triggerType: string;
+    payload: Record<string, unknown>;
+    idempotencyKey?: string;
+  }): Promise<{ executionsCount: number; hasWaitingWorkflow: boolean }> {
+    try {
+      const res = await fetch(`${this.aiRuntimeEndpoint}/api/automation/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: params.workspaceId,
+          agentId: params.agentId,
+          triggerType: params.triggerType,
+          payload: params.payload,
+          idempotencyKey: params.idempotencyKey,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      const executions = (data?.executions || []) as Array<{ status: string }>;
+      const hasWaitingWorkflow = executions.some((e) => e.status === 'waiting');
+      return {
+        executionsCount: Number(data?.executionsCount || 0),
+        hasWaitingWorkflow,
+      };
+    } catch (err) {
+      console.error('[Message-Handler] Erreur dispatch automation:', err);
+      return { executionsCount: 0, hasWaitingWorkflow: false };
+    }
+  }
+
   public async handleIncomingMessage(agentId: string, msg: proto.IWebMessageInfo): Promise<void> {
     const rawJid = msg.key?.remoteJid;
     if (!rawJid || !msg.message) return;
@@ -311,18 +343,41 @@ export class WhatsAppMessageHandler {
     }
 
     const idempotencyKey = params.waMessageId ? `wa:${params.agentId}:${params.waMessageId}` : `msg:${messageId}`;
-    await this.dispatchToAiRuntime(
-      {
+
+    let handledByWaitingAutomation = false;
+    if (workspaceId) {
+      const autoRes = await this.dispatchAutomation({
+        workspaceId,
         agentId: params.agentId,
-        conversationId,
-        contactPhoneNumber: params.contactPhoneNumber,
-        replyJid: params.rawJid,
-        incomingMessage: params.textContent,
-        incomingMessageType: 'text',
-        idempotencyKey,
-      },
-      workspaceId
-    );
+        triggerType: 'wa_private_message_received',
+        payload: {
+          contact: { phone: params.contactPhoneNumber, name: params.pushName },
+          message: { text: params.textContent, id: params.waMessageId },
+          contactPhoneNumber: params.contactPhoneNumber,
+          conversationId,
+        },
+        idempotencyKey: `auto:${idempotencyKey}`,
+      });
+
+      if (autoRes.hasWaitingWorkflow) {
+        handledByWaitingAutomation = true;
+      }
+    }
+
+    if (!handledByWaitingAutomation) {
+      await this.dispatchToAiRuntime(
+        {
+          agentId: params.agentId,
+          conversationId,
+          contactPhoneNumber: params.contactPhoneNumber,
+          replyJid: params.rawJid,
+          incomingMessage: params.textContent,
+          incomingMessageType: 'text',
+          idempotencyKey,
+        },
+        workspaceId
+      );
+    }
   }
 
   private async handleIncomingImageMessage(params: {

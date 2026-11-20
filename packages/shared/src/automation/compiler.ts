@@ -19,6 +19,34 @@ interface CompileOptions {
 }
 
 /**
+ * Extracts explicit international or local phone numbers mentioned in a natural instruction.
+ * Examples: +237692265718, 692265718, contacte le 695923604, au numéro +33612345678
+ */
+export function extractTargetPhoneNumber(text: string): string | null {
+  // 1. Explicit international phone number format (+237..., +33...)
+  const intlMatch = text.match(/(\+[1-9]\d{7,14})/);
+  if (intlMatch) {
+    return intlMatch[1];
+  }
+  // 2. Preceded by keywords (numéro, contacte, au, fournisseur, etc.)
+  const kwMatch = text.match(
+    /(?:numéro|numero|contacte|contacter|avertis|avertir|préviens|previens|appelle|appeler|fournisseur|responsable|au)\s*[:]?\s*(?:est\s+le\s+)?(?:\+)?([0-9\s.-]{8,15})/i
+  );
+  if (kwMatch && kwMatch[1]) {
+    const cleaned = kwMatch[1].replace(/[\s.-]/g, '');
+    if (cleaned.length >= 8) {
+      return cleaned.startsWith('237') ? `+${cleaned}` : `+237${cleaned}`;
+    }
+  }
+  // 3. Standalone Cameroonian 9-digit format (6xxxxxxxx, 2xxxxxxxx)
+  const cmMatch = text.match(/(?<!\d)(?:6[5789]\d{7}|2[234]\d{7})(?!\d)/);
+  if (cmMatch) {
+    return `+237${cmMatch[0]}`;
+  }
+  return null;
+}
+
+/**
  * Compiles a free-form natural language business instruction into a structured
  * deterministic WorkflowDefinition draft with simulations, permissions, and missing data detection.
  */
@@ -41,6 +69,8 @@ export function compileNaturalInstruction(
       error: 'INSTRUCTION_TOO_SHORT',
     };
   }
+
+  const targetPhone = extractTargetPhoneNumber(instruction);
 
   let domain: AutomationDomain = options?.preferredDomain || 'general';
   let triggerType: TriggerType = 'wa_private_message_received';
@@ -125,17 +155,21 @@ export function compileNaturalInstruction(
     // Étape 1 : Demande au fournisseur
     steps.push({
       id: 'step_inquire_supplier',
-      name: 'Contacter le fournisseur autorisé',
+      name: targetPhone ? `Contacter le fournisseur (${targetPhone})` : 'Contacter le fournisseur autorisé',
       action_type: 'send_supplier_inquiry',
       payload: {
         template: 'Bonjour, demande de disponibilité immédiate pour la référence client : {{message.text}}',
         recipient_role: 'supplier',
+        supplier_phone: targetPhone || undefined,
+        recipient_phone: targetPhone || undefined,
       },
     });
     dryRunSteps.push({
-      stepName: 'Contacter le fournisseur autorisé',
+      stepName: targetPhone ? `Contacter le fournisseur (${targetPhone})` : 'Contacter le fournisseur autorisé',
       action: 'send_supplier_inquiry',
-      outputPreview: 'Message WhatsApp généré et envoyé au numéro du fournisseur.',
+      outputPreview: targetPhone
+        ? `Message WhatsApp généré et envoyé immédiatement au numéro ${targetPhone}.`
+        : 'Message WhatsApp généré et envoyé au numéro du fournisseur.',
     });
 
     // Étape 2 : Attente de la réponse du fournisseur (wait_for_message)
@@ -146,6 +180,7 @@ export function compileNaturalInstruction(
       payload: {
         timeout_minutes: 60,
         expected_role: 'supplier',
+        expected_phone: targetPhone || undefined,
         variable_to_store: 'supplier_response',
       },
       timeout_minutes: 60,
@@ -153,7 +188,9 @@ export function compileNaturalInstruction(
     dryRunSteps.push({
       stepName: 'Attendre la confirmation du fournisseur',
       action: 'wait_for_message',
-      outputPreview: 'Workflow mis en pause sécurisée. En attente de la réponse du fournisseur (délai: 60 min).',
+      outputPreview: targetPhone
+        ? `Workflow en attente de la réponse du fournisseur (${targetPhone}).`
+        : 'Workflow mis en pause sécurisée. En attente de la réponse du fournisseur (délai: 60 min).',
     });
 
     // Étape 3 : Réponse au client final
@@ -163,7 +200,7 @@ export function compileNaturalInstruction(
       action_type: 'send_private_message',
       payload: {
         text: 'Bonjour, suite à confirmation auprès de notre fournisseur : {{supplier_response.text}}',
-        recipient_phone: '{{client.phone}}',
+        recipient_phone: '{{contact.phone}}',
       },
     });
     dryRunSteps.push({
@@ -172,7 +209,9 @@ export function compileNaturalInstruction(
       outputPreview: 'Notification automatique envoyée au client dès réception du fournisseur.',
     });
 
-    missingInformation.push('Numéro WhatsApp officiel du fournisseur (ou fiche fournisseur associée)');
+    if (!targetPhone) {
+      missingInformation.push('Numéro WhatsApp officiel du fournisseur (ou fiche fournisseur associée)');
+    }
   }
   // Scénario B : Gestion des Absences RH
   else if (domain === 'hr' || lower.includes('absence') || lower.includes('congé')) {
@@ -196,34 +235,42 @@ export function compileNaturalInstruction(
 
     steps.push({
       id: 'step_notify_manager_hr',
-      name: 'Notifier le responsable RH',
+      name: targetPhone ? `Notifier le responsable RH (${targetPhone})` : 'Notifier le responsable RH',
       action_type: 'notify_manager',
       payload: {
         title: 'Nouvelle absence signalée',
         summary: 'L’employé {{contact.name}} ({{contact.phone}}) signale : {{message.text}}',
+        phone: targetPhone || undefined,
+        recipient_phone: targetPhone || undefined,
       },
     });
     dryRunSteps.push({
-      stepName: 'Notifier le responsable RH',
+      stepName: targetPhone ? `Notifier le responsable RH (${targetPhone})` : 'Notifier le responsable RH',
       action: 'notify_manager',
-      outputPreview: 'Alerte WhatsApp transmise immédiatement au responsable.',
+      outputPreview: targetPhone
+        ? `Alerte WhatsApp transmise immédiatement au responsable sur ${targetPhone}.`
+        : 'Alerte WhatsApp transmise immédiatement au responsable.',
     });
   }
   // Scénario C : Réclamation & Escalade Manager
   else if (domain === 'support' || lower.includes('mécontent') || lower.includes('avertis le responsable')) {
     steps.push({
       id: 'step_notify_manager_support',
-      name: 'Alerter le responsable du mécontentement',
+      name: targetPhone ? `Alerter le responsable (${targetPhone})` : 'Alerter le responsable du mécontentement',
       action_type: 'notify_manager',
       payload: {
         title: 'Alerte insatisfaction client',
         summary: 'Client {{contact.phone}} insatisfait : "{{message.text}}". Reprise conseillée.',
+        phone: targetPhone || undefined,
+        recipient_phone: targetPhone || undefined,
       },
     });
     dryRunSteps.push({
-      stepName: 'Alerter le responsable du mécontentement',
+      stepName: targetPhone ? `Alerter le responsable (${targetPhone})` : 'Alerter le responsable du mécontentement',
       action: 'notify_manager',
-      outputPreview: 'Message d’alerte d’escalade envoyé au manager.',
+      outputPreview: targetPhone
+        ? `Message d’alerte envoyé au responsable (${targetPhone}).`
+        : 'Message d’alerte d’escalade envoyé au manager.',
     });
 
     steps.push({
@@ -239,6 +286,49 @@ export function compileNaturalInstruction(
       action: 'transfer_to_human',
       outputPreview: 'La conversation est basculée en attente de prise en main humaine.',
     });
+  }
+  // Scénario D : Contacter un numéro tiers spécifié (Alerte / Notification directe)
+  else if (targetPhone || lower.includes('contacte') || lower.includes('avertis') || lower.includes('préviens') || lower.includes('previens')) {
+    const notifyName = targetPhone ? `Alerter le numéro ${targetPhone}` : 'Alerter le contact désigné';
+    steps.push({
+      id: 'step_notify_target',
+      name: notifyName,
+      action_type: 'notify_manager',
+      payload: {
+        title: 'Alerte Agent INNOICA',
+        summary: 'Alerte client de {{contact.phone}} : "{{message.text}}"',
+        phone: targetPhone || undefined,
+        recipient_phone: targetPhone || undefined,
+      },
+    });
+    dryRunSteps.push({
+      stepName: notifyName,
+      action: 'notify_manager',
+      outputPreview: targetPhone
+        ? `Message WhatsApp d’alerte transmis immédiatement au ${targetPhone}.`
+        : 'Message WhatsApp transmis au destinataire.',
+    });
+
+    if (lower.includes('réponds au client') || lower.includes('reponds au client') || lower.includes('dis au client')) {
+      steps.push({
+        id: 'step_reply_customer',
+        name: 'Informer le client de la prise en charge',
+        action_type: 'send_private_message',
+        payload: {
+          text: 'Bonjour ! Votre message a bien été transmis à notre équipe qui vous recontacte rapidement.',
+          recipient_phone: '{{contact.phone}}',
+        },
+      });
+      dryRunSteps.push({
+        stepName: 'Informer le client de la prise en charge',
+        action: 'send_private_message',
+        outputPreview: 'Notification automatique envoyée au client.',
+      });
+    }
+
+    if (!targetPhone) {
+      missingInformation.push('Numéro WhatsApp auquel transmettre l’information');
+    }
   }
   // Scénario D : Rapport Quotidien Matinal
   else if (triggerType === 'schedule_cron' || lower.includes('rapport')) {

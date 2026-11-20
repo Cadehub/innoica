@@ -40,6 +40,50 @@ export class AutomationEngine {
 
     const target = condition.value;
 
+    // Déduction intelligente de l'intention s'il s'agit d'un message brut sans métadonnées
+    if (condition.field === 'message.intent' && val === undefined) {
+      const msgText = String(
+        (variables.message as Record<string, unknown>)?.text ||
+        (variables.trigger as Record<string, unknown>)?.messageText ||
+        ''
+      ).toLowerCase();
+
+      if (target === 'product_availability') {
+        const isProductQuery =
+          /(?:produit|article|disponible|disponibilité|dispo|stock|taille|prix|combien|coûte|coute|vendez|acheter|avez[- ]vous|catalogue|modèle|modele)/i.test(
+            msgText
+          ) ||
+          msgText.includes('?') ||
+          msgText.length > 3;
+        if (isProductQuery) {
+          val = 'product_availability';
+        }
+      } else if (target === 'absence_report') {
+        const isAbsence =
+          /(?:absent|absence|malade|maladie|congé|conge|retard|empêchement|empechement|ne pourrai pas|ne viens pas)/i.test(
+            msgText
+          );
+        if (isAbsence) {
+          val = 'absence_report';
+        }
+      } else if (target === 'complaint') {
+        const isComplaint =
+          /(?:mécontent|mecontent|insatisfait|remboursement|problème|probleme|plainte|déçu|decu|réclamation|reclamation|arnaque)/i.test(
+            msgText
+          );
+        if (isComplaint) {
+          val = 'complaint';
+        }
+      }
+    } else if (condition.field === 'message.sentiment' && val === undefined) {
+      const msgText = String((variables.message as Record<string, unknown>)?.text || '').toLowerCase();
+      if (/(?:mécontent|mecontent|insatisfait|colère|colere|remboursement|plainte|déçu|nul|mauvais|incompétent)/i.test(msgText)) {
+        val = 'negative';
+      } else {
+        val = 'neutral';
+      }
+    }
+
     switch (condition.operator) {
       case 'equals':
         return String(val) === String(target);
@@ -113,10 +157,21 @@ export class AutomationEngine {
         continue;
       }
 
+      const contactObj = (payload.contact as Record<string, unknown>) || {
+        phone: payload.contactPhoneNumber || (payload.sender as Record<string, unknown>)?.phone,
+        name: payload.contactName || (payload.sender as Record<string, unknown>)?.pushName,
+      };
+
+      const messageObj = (payload.message as Record<string, unknown>) || {
+        text: payload.messageText || payload.textContent || (typeof payload === 'string' ? payload : ''),
+        id: payload.messageId || payload.waMessageId || '',
+      };
+
       const initialVariables: Record<string, unknown> = {
         trigger: payload,
-        message: payload.message || payload,
-        contact: payload.contact || { phone: payload.contactPhoneNumber },
+        message: messageObj,
+        contact: contactObj,
+        client: contactObj, // Alias accessible via {{client.phone}} et {{client.name}}
         group: payload.group || null,
         workspaceId,
         agentId,
