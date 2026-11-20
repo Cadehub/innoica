@@ -67,6 +67,8 @@ export {
   createStoreOrderPayloadSchema,
   orderStatusTransitionSchema,
 } from './schemas/index';
-export * from './types/ecommerce';
-export * from './schemas/automation';
-export * from './automation/compiler';
+export * from './types/ecommerce.js';
+export * from './types/automation.js';
+export * from './schemas/automation.js';
+export * from './automation/compiler.js';
+export { compileNaturalInstruction } from './automation/compiler.js';

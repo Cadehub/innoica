@@ -3,7 +3,6 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from '@/i18n/routing';
 import {
-  Zap,
   Bot,
   Play,
   CheckCircle2,
@@ -16,7 +15,6 @@ import {
   Plus,
   Layers,
   ShieldCheck,
-  Sparkles,
   RefreshCw,
   Trash2,
   Copy,

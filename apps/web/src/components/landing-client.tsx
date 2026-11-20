@@ -24,7 +24,6 @@ import {
   ShoppingBag,
   Sliders,
   Smartphone,
-  Sparkles,
   User,
   Zap,
   Layers,
@@ -503,7 +502,7 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
                 <span className="px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-700 border border-zinc-200 text-[10px] font-semibold">BYOK</span>
               </div>
               <div className="h-9 w-9 rounded-xl bg-zinc-100 text-zinc-900 flex items-center justify-center">
-                <Sparkles className="h-4 w-4" />
+                <Bot className="h-4 w-4" />
               </div>
               <h4 className="text-xs font-semibold text-zinc-900">RAG & IA Dédiée</h4>
               <p className="text-xs text-zinc-600 leading-relaxed">
@@ -521,7 +520,7 @@ export function LandingClient({ locale, isAuthenticated }: LandingClientProps) {
                 <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-semibold">Sortant</span>
               </div>
               <div className="h-9 w-9 rounded-xl bg-zinc-800 text-white flex items-center justify-center">
-                <Zap className="h-4 w-4 text-emerald-400" />
+                <Sliders className="h-4 w-4 text-emerald-400" />
               </div>
               <h4 className="text-xs font-semibold text-white">Supervision & Réponse</h4>
               <p className="text-xs text-zinc-300 leading-relaxed">
