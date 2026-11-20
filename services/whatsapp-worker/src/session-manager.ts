@@ -624,6 +624,73 @@ export class WhatsAppSessionManager {
   }
 
   /**
+   * Envoi d'un message multimédia (image, document, audio) sur WhatsApp via Baileys
+   */
+  public async sendMediaMessage(
+    agentId: string,
+    toPhone: string,
+    media: {
+      type: 'image' | 'document' | 'audio';
+      url?: string;
+      buffer?: Buffer;
+      caption?: string;
+      fileName?: string;
+      mimetype?: string;
+    }
+  ): Promise<{ messageId: string }> {
+    const session = this.sessions.get(agentId);
+    if (!session || session.status !== 'connected') {
+      throw new Error(`Agent ${agentId} n'est pas connecté à WhatsApp`);
+    }
+
+    const jid = toPhone.includes('@')
+      ? toPhone
+      : `${normalizePhoneNumberForBaileys(toPhone)}@s.whatsapp.net`;
+
+    const preMessageId = `3EB0${crypto.randomBytes(9).toString('hex').toUpperCase()}`;
+    if (this.sentMessageIds.size > 2000) {
+      this.sentMessageIds.clear();
+    }
+    this.sentMessageIds.add(preMessageId);
+
+    const mediaSource = media.buffer || (media.url ? { url: media.url } : undefined);
+    if (!mediaSource) {
+      throw new Error('Buffer ou URL requis pour sendMediaMessage');
+    }
+
+    let messageContent: any = {};
+    if (media.type === 'image') {
+      messageContent = {
+        image: mediaSource,
+        caption: media.caption || '',
+        mimetype: media.mimetype || 'image/jpeg',
+      };
+    } else if (media.type === 'document') {
+      messageContent = {
+        document: mediaSource,
+        fileName: media.fileName || 'document.pdf',
+        mimetype: media.mimetype || 'application/pdf',
+        caption: media.caption || '',
+      };
+    } else if (media.type === 'audio') {
+      messageContent = {
+        audio: mediaSource,
+        mimetype: media.mimetype || 'audio/ogg; codecs=opus',
+        ptt: true,
+      };
+    }
+
+    const sent = await session.sock.sendMessage(jid, messageContent, { messageId: preMessageId } as any);
+    const finalId = sent?.key?.id || preMessageId;
+    this.sentMessageIds.add(finalId);
+    this.rememberMessage(finalId, sent?.message || messageContent);
+    session.lastActivityAt = Date.now();
+
+    this.logger.info(`[WA-Worker] Média (${media.type}) envoyé à ${toPhone} par agent ${agentId} (ID: ${finalId})`);
+    return { messageId: finalId };
+  }
+
+  /**
    * Envoi d'un indicateur de présence en temps réel ('composing' | 'paused' | 'recording' | 'available')
    */
   public async sendPresence(

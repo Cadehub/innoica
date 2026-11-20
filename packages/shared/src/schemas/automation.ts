@@ -64,6 +64,9 @@ export const ActionTypeSchema = z.enum([
   'transfer_to_human',
   // Attente & Reprise
   'wait_for_message',
+  'wait_delay',
+  // Intégrations & Webhooks
+  'webhook_call',
   // Contacts & CRM
   'search_contact',
   'upsert_contact',
@@ -101,7 +104,12 @@ export const ConditionOperatorSchema = z.enum([
 export const WorkflowConditionSchema = z.object({
   field: z.string().min(1),
   operator: ConditionOperatorSchema,
-  value: z.any(),
+  value: z.any().optional(),
+});
+
+export const WorkflowStepBranchSchema = z.object({
+  condition: WorkflowConditionSchema.optional(),
+  next_step_id: z.string().min(1),
 });
 
 export const WorkflowStepSchema = z.object({
@@ -113,6 +121,8 @@ export const WorkflowStepSchema = z.object({
   require_approval: z.boolean().optional(),
   on_error: z.enum(['fail', 'continue', 'retry']).default('fail'),
   next_step_id: z.string().optional(),
+  branches: z.array(WorkflowStepBranchSchema).optional(),
+  depends_on: z.array(z.string()).optional(),
 });
 
 export const WorkflowStatusSchema = z.enum(['draft', 'active', 'paused', 'archived']);
@@ -129,6 +139,9 @@ export const CreateWorkflowSchema = z.object({
   steps: z.array(WorkflowStepSchema).min(1, 'Au moins une étape d’action est requise'),
   status: WorkflowStatusSchema.default('active'),
   priority: z.number().int().default(0),
+  version: z.number().int().positive().default(1),
+  is_active_version: z.boolean().default(true),
+  parent_workflow_id: z.string().uuid().optional().nullable(),
 });
 
 export const CompileNaturalInstructionSchema = z.object({

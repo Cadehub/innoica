@@ -24,6 +24,29 @@ export async function POST(req: NextRequest) {
 
     const { instruction, agent_id, preferred_domain } = parsed.data;
 
+    const aiRuntimeUrl = process.env.AI_RUNTIME_URL || 'http://localhost:4002';
+    try {
+      const aiRes = await fetch(`${aiRuntimeUrl}/api/automation/compile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instruction,
+          agentId: agent_id,
+          preferredDomain: preferred_domain,
+          locale: 'fr',
+        }),
+        signal: AbortSignal.timeout(6000),
+      });
+      if (aiRes.ok) {
+        const aiData = await aiRes.json();
+        if (aiData?.success) {
+          return NextResponse.json(aiData);
+        }
+      }
+    } catch {
+      // Fallback local en cas d'indisponibilité temporaire du runtime
+    }
+
     const result = compileNaturalInstruction(instruction, {
       agentId: agent_id,
       preferredDomain: preferred_domain,

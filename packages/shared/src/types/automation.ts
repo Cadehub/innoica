@@ -62,6 +62,9 @@ export type ActionType =
   | 'transfer_to_human'
   // Attente & Reprise
   | 'wait_for_message'
+  | 'wait_delay'
+  // Intégrations & Webhooks
+  | 'webhook_call'
   // Contacts & CRM
   | 'search_contact'
   | 'upsert_contact'
@@ -97,7 +100,12 @@ export type ConditionOperator =
 export interface WorkflowCondition {
   field: string;
   operator: ConditionOperator;
-  value: unknown;
+  value?: unknown;
+}
+
+export interface WorkflowStepBranch {
+  condition?: WorkflowCondition;
+  next_step_id: string;
 }
 
 export interface WorkflowStep {
@@ -109,6 +117,8 @@ export interface WorkflowStep {
   require_approval?: boolean;
   on_error?: 'fail' | 'continue' | 'retry';
   next_step_id?: string;
+  branches?: WorkflowStepBranch[];
+  depends_on?: string[];
 }
 
 export type WorkflowStatus = 'draft' | 'active' | 'paused' | 'archived';
@@ -127,6 +137,9 @@ export interface WorkflowDefinition {
   steps: WorkflowStep[];
   status: WorkflowStatus;
   priority: number;
+  version?: number;
+  is_active_version?: boolean;
+  parent_workflow_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -157,6 +170,8 @@ export interface WorkflowExecution {
   workflow_id: string;
   agent_id: string | null;
   idempotency_key?: string | null;
+  correlation_id?: string | null;
+  expected_sender_phone?: string | null;
   status: ExecutionStatus;
   trigger_event: TriggerType;
   trigger_payload: Record<string, unknown>;

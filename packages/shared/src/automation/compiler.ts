@@ -163,6 +163,7 @@ export function compileNaturalInstruction(
         supplier_phone: targetPhone || undefined,
         recipient_phone: targetPhone || undefined,
       },
+      next_step_id: 'step_wait_supplier_reply',
     });
     dryRunSteps.push({
       stepName: targetPhone ? `Contacter le fournisseur (${targetPhone})` : 'Contacter le fournisseur autorisé',
@@ -184,6 +185,7 @@ export function compileNaturalInstruction(
         variable_to_store: 'supplier_response',
       },
       timeout_minutes: 60,
+      next_step_id: 'step_reply_customer',
     });
     dryRunSteps.push({
       stepName: 'Attendre la confirmation du fournisseur',
@@ -226,6 +228,7 @@ export function compileNaturalInstruction(
         reason: '{{message.text}}',
         status: 'pending_review',
       },
+      next_step_id: 'step_notify_manager_hr',
     });
     dryRunSteps.push({
       stepName: 'Enregistrer la déclaration d’absence',
@@ -264,6 +267,7 @@ export function compileNaturalInstruction(
         phone: targetPhone || undefined,
         recipient_phone: targetPhone || undefined,
       },
+      next_step_id: 'step_request_reprise',
     });
     dryRunSteps.push({
       stepName: targetPhone ? `Alerter le responsable (${targetPhone})` : 'Alerter le responsable du mécontentement',
@@ -287,7 +291,81 @@ export function compileNaturalInstruction(
       outputPreview: 'La conversation est basculée en attente de prise en main humaine.',
     });
   }
-  // Scénario D : Contacter un numéro tiers spécifié (Alerte / Notification directe)
+  // Scénario D : Webhook ou Appel API externe
+  else if (lower.includes('webhook') || lower.includes('api') || lower.includes('http://') || lower.includes('https://')) {
+    const urlMatch = instruction.match(/https?:\/\/[^\s"'<>]+/i);
+    const targetUrl = urlMatch ? urlMatch[0] : '';
+
+    steps.push({
+      id: 'step_call_webhook',
+      name: targetUrl ? `Déclencher le webhook (${new URL(targetUrl).hostname})` : 'Déclencher le webhook externe',
+      action_type: 'webhook_call',
+      payload: {
+        url: targetUrl || 'https://api.example.com/webhook',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: {
+          event: triggerType,
+          contact: '{{contact.phone}}',
+          message: '{{message.text}}',
+        },
+      },
+    });
+    dryRunSteps.push({
+      stepName: 'Déclencher le webhook externe',
+      action: 'webhook_call',
+      outputPreview: targetUrl
+        ? `Appel HTTP sécurisé émis vers ${targetUrl}.`
+        : 'Appel HTTP POST émis vers l’endpoint configuré.',
+    });
+
+    if (!targetUrl) {
+      missingInformation.push('URL HTTPS cible du webhook à notifier');
+    }
+  }
+  // Scénario E : Temporisation programmée (wait_delay)
+  else if (lower.includes('attends') && (lower.includes('seconde') || lower.includes('minute') || lower.includes('heure'))) {
+    const delayMatch = lower.match(/attends?\s+(\d+)\s*(seconde|secondes|minute|minutes|heure|heures)/i);
+    let delaySeconds = 60;
+    if (delayMatch) {
+      const val = parseInt(delayMatch[1], 10);
+      const unit = delayMatch[2].toLowerCase();
+      if (unit.startsWith('seconde')) delaySeconds = val;
+      else if (unit.startsWith('minute')) delaySeconds = val * 60;
+      else if (unit.startsWith('heure')) delaySeconds = val * 3600;
+    }
+
+    steps.push({
+      id: 'step_wait_delay',
+      name: `Attendre ${Math.round(delaySeconds / 60)} minute(s)`,
+      action_type: 'wait_delay',
+      payload: {
+        delay_seconds: delaySeconds,
+      },
+      next_step_id: 'step_delayed_followup',
+    });
+    dryRunSteps.push({
+      stepName: 'Temporisation du workflow',
+      action: 'wait_delay',
+      outputPreview: `Pause de ${delaySeconds} secondes avant l'action suivante.`,
+    });
+
+    steps.push({
+      id: 'step_delayed_followup',
+      name: 'Envoyer le message de relance',
+      action_type: 'send_private_message',
+      payload: {
+        text: 'Bonjour, avez-vous pu prendre connaissance de notre précédent message ?',
+        recipient_phone: '{{contact.phone}}',
+      },
+    });
+    dryRunSteps.push({
+      stepName: 'Envoyer le message de relance',
+      action: 'send_private_message',
+      outputPreview: 'Message de relance envoyé au client après expiration du délai.',
+    });
+  }
+  // Scénario F : Contacter un numéro tiers spécifié (Alerte / Notification directe)
   else if (targetPhone || lower.includes('contacte') || lower.includes('avertis') || lower.includes('préviens') || lower.includes('previens')) {
     const notifyName = targetPhone ? `Alerter le numéro ${targetPhone}` : 'Alerter le contact désigné';
     steps.push({
@@ -300,6 +378,7 @@ export function compileNaturalInstruction(
         phone: targetPhone || undefined,
         recipient_phone: targetPhone || undefined,
       },
+      next_step_id: (lower.includes('réponds au client') || lower.includes('reponds au client') || lower.includes('dis au client')) ? 'step_reply_customer' : undefined,
     });
     dryRunSteps.push({
       stepName: notifyName,
@@ -330,7 +409,7 @@ export function compileNaturalInstruction(
       missingInformation.push('Numéro WhatsApp auquel transmettre l’information');
     }
   }
-  // Scénario D : Rapport Quotidien Matinal
+  // Scénario G : Rapport Quotidien Matinal
   else if (triggerType === 'schedule_cron' || lower.includes('rapport')) {
     steps.push({
       id: 'step_generate_report',
@@ -341,6 +420,7 @@ export function compileNaturalInstruction(
         include_conversations: true,
         include_orders: true,
       },
+      next_step_id: 'step_send_report_owner',
     });
     dryRunSteps.push({
       stepName: 'Compiler le rapport d’activité',
@@ -363,7 +443,7 @@ export function compileNaturalInstruction(
       outputPreview: 'Rapport envoyé par WhatsApp sur le numéro du propriétaire de l’entreprise.',
     });
   }
-  // Scénario E : Groupes WhatsApp
+  // Scénario H : Groupes WhatsApp
   else if (domain === 'group_mgmt' || lower.includes('groupe')) {
     steps.push({
       id: 'step_reply_group',
@@ -434,6 +514,8 @@ export function compileNaturalInstruction(
       steps,
       status: 'active',
       priority: 10,
+      version: 1,
+      is_active_version: true,
     },
   };
 }

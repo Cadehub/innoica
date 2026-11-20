@@ -106,34 +106,6 @@ export function AutomationsClient({
     },
   ]);
 
-  // Modèles prêts à l'emploi
-  const quickTemplates = [
-    {
-      title: 'Vérification Fournisseur avec Attente (wait_for_message)',
-      domain: 'suppliers',
-      prompt:
-        'Si un client demande un produit et que tu ne trouves pas sa disponibilité, contacte le fournisseur autorisé, demande l’information, attends sa réponse puis réponds au client.',
-    },
-    {
-      title: 'Gestion des Absences Employés & Alerte RH',
-      domain: 'hr',
-      prompt:
-        'Lorsqu’un employé signale une absence par WhatsApp, enregistre sa déclaration et préviens immédiatement le responsable RH.',
-    },
-    {
-      title: 'Escalade Client Insatisfait & Reprise Humaine',
-      domain: 'support',
-      prompt:
-        'Si un client manifeste son mécontentement, essaie de résoudre son problème et avertis le responsable si tu n’y arrives pas en proposant le transfert humain.',
-    },
-    {
-      title: 'Rapport d’Activité Quotidien 08h00',
-      domain: 'internal',
-      prompt:
-        'Chaque matin à 08h00, prépare un rapport sur les activités de l’entreprise et envoie-le par WhatsApp au propriétaire.',
-    },
-  ];
-
   // Compiler une consigne naturelle
   const handleCompile = async () => {
     if (!naturalInstruction.trim()) return;
@@ -566,6 +538,117 @@ export function AutomationsClient({
                 </div>
               </div>
 
+              {/* Graphe Déterministe DAG */}
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-4 space-y-3">
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="font-semibold text-zinc-900 uppercase tracking-wider text-[11px]">
+                    Topologie d'Exécution DAG (Graphe Déterministe)
+                  </span>
+                  <span className="text-zinc-500 text-[10px]">
+                    {compileResult.workflow.steps?.length || 0} étape(s)
+                  </span>
+                </div>
+
+                <div className="flex flex-col space-y-2">
+                  {/* Nœud Déclencheur */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-zinc-900 text-white flex items-center justify-center text-xs font-mono shrink-0 shadow-2xs">
+                      <Play className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="flex-1 rounded-xl border border-zinc-300 bg-white p-3 shadow-2xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-zinc-900">Événement Déclencheur</span>
+                        <span className="rounded bg-zinc-100 px-2 py-0.5 text-[10px] font-mono text-zinc-700">
+                          {compileResult.workflow.trigger_type}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Connecteur */}
+                  <div className="ml-4 w-0.5 h-3 bg-zinc-300" />
+
+                  {/* Nœud Conditions */}
+                  {compileResult.workflow.conditions && compileResult.workflow.conditions.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center text-xs font-mono shrink-0 shadow-2xs">
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="flex-1 rounded-xl border border-amber-200 bg-amber-50/40 p-3 shadow-2xs">
+                          <span className="text-[10px] font-mono text-amber-800 uppercase font-semibold block mb-1">
+                            Filtres d'admissibilité ({compileResult.workflow.conditions.length})
+                          </span>
+                          <div className="text-xs text-zinc-800 font-mono space-y-0.5">
+                            {compileResult.workflow.conditions.map((c: any, i: number) => (
+                              <div key={i}>
+                                • {c.field} <span className="text-amber-700">{c.operator}</span> {String(c.value)}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="ml-4 w-0.5 h-3 bg-zinc-300" />
+                    </>
+                  )}
+
+                  {/* Nœuds d'Actions DAG */}
+                  {compileResult.workflow.steps?.map((step: any, idx: number) => {
+                    const isWait = step.action_type === 'wait_for_message' || step.action_type === 'wait_delay';
+                    const isApproval = step.require_approval;
+                    const isLast = idx === (compileResult.workflow?.steps?.length ?? 1) - 1;
+
+                    return (
+                      <div key={step.id || idx}>
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-mono font-bold shrink-0 shadow-2xs ${
+                              isWait
+                                ? 'bg-amber-600 text-white'
+                                : isApproval
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-zinc-800 text-white'
+                            }`}
+                          >
+                            {idx + 1}
+                          </div>
+                          <div className="flex-1 rounded-xl border border-zinc-200 bg-white p-3.5 shadow-2xs space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-zinc-900">{step.name}</span>
+                                <span className="rounded bg-zinc-100 border border-zinc-200 px-2 py-0.5 text-[10px] font-mono text-zinc-700">
+                                  {step.action_type}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                {isWait && (
+                                  <span className="rounded bg-amber-100 text-amber-900 px-1.5 py-0.5 text-[9px] font-mono font-medium">
+                                    Attente asynchrone
+                                  </span>
+                                )}
+                                {isApproval && (
+                                  <span className="rounded bg-purple-100 text-purple-900 px-1.5 py-0.5 text-[9px] font-mono font-medium">
+                                    Approbation requise
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {step.next_step_id && (
+                              <div className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-500 pt-1 border-t border-zinc-100">
+                                <ArrowRight className="h-3 w-3 text-zinc-400" />
+                                <span>Cible suivante : {step.next_step_id}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        {!isLast && <div className="ml-4 w-0.5 h-3 bg-zinc-300" />}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Simulation Dry-Run */}
               {compileResult.simulatedDryRun && (
                 <div className="rounded-xl border border-zinc-200/80 bg-zinc-900 text-zinc-100 p-4 space-y-2">
@@ -602,30 +685,30 @@ export function AutomationsClient({
             </div>
           )}
 
-          {/* Modèles prêts à l'emploi */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 font-mono">
-              Modèles prêts à l'emploi (Cliquez pour charger) :
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {quickTemplates.map((t, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => {
-                    setNaturalInstruction(t.prompt);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="rounded-xl border border-zinc-200 bg-white p-4 hover:border-zinc-400 cursor-pointer transition-colors space-y-1.5 shadow-2xs"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-zinc-900">{t.title}</span>
-                    <span className="rounded bg-zinc-100 text-zinc-600 text-[10px] font-mono px-1.5 py-0.5">
-                      {t.domain}
-                    </span>
-                  </div>
-                  <p className="text-xs text-zinc-500 italic line-clamp-2">"{t.prompt}"</p>
-                </div>
-              ))}
+          {/* Directives Architecturales & Capacités du Studio */}
+          <div className="rounded-xl border border-zinc-200 bg-white p-5 space-y-3 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-900 font-mono">
+                Directives de programmation universelle
+              </h3>
+              <span className="text-[10px] text-zinc-500 font-mono">Compilateur Déterministe Zod v2.0</span>
+            </div>
+            <p className="text-xs text-zinc-600 leading-relaxed">
+              Formulez librement vos règles d'entreprise en langage naturel. Le moteur analyse l'intention métier, résout les dépendances, extrait les numéros cibles ou les délais, et structure l'exécution DAG en toute sécurité.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-xs">
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50/70 p-3 space-y-1">
+                <div className="font-semibold text-zinc-900">Événements Déclencheurs</div>
+                <p className="text-zinc-600 text-[11px]">Messages WhatsApp entrants, audios vocaux, images, mentions de groupe, réclamations ou planifications cron.</p>
+              </div>
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50/70 p-3 space-y-1">
+                <div className="font-semibold text-zinc-900">Corrélation Asynchrone</div>
+                <p className="text-zinc-600 text-[11px]">Mise en pause sécurisée (attente réponse tiers), isolation des conversations et reprise sans boucle.</p>
+              </div>
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50/70 p-3 space-y-1">
+                <div className="font-semibold text-zinc-900">Garde-Fou & Approbations</div>
+                <p className="text-zinc-600 text-[11px]">Approbation humaine obligatoire pour toute action administrative impactante sur les groupes ou les contacts.</p>
+              </div>
             </div>
           </div>
         </div>

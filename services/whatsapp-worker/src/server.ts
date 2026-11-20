@@ -72,17 +72,37 @@ export function createWorkerServer(sessionManager: WhatsAppSessionManager): Fast
   // 3. Envoi de message sortant
   app.post<{
     Params: { agentId: string };
-    Body: { toPhone: string; text: string };
+    Body: {
+      toPhone: string;
+      text?: string;
+      mediaUrl?: string;
+      mediaType?: 'image' | 'document' | 'audio';
+      fileName?: string;
+      caption?: string;
+    };
   }>('/api/sessions/:agentId/send', async (request, reply) => {
     const { agentId } = request.params;
-    const { toPhone, text } = request.body;
+    const { toPhone, text, mediaUrl, mediaType, fileName, caption } = request.body || {};
 
-    if (!toPhone || !text) {
-      return reply.status(400).send({ error: 'toPhone et text sont requis' });
+    if (!toPhone || (!text && !mediaUrl)) {
+      return reply.status(400).send({ error: 'toPhone et text (ou mediaUrl) sont requis' });
     }
 
     try {
-      const result = await sessionManager.sendMessage(agentId, toPhone, text);
+      if (mediaUrl) {
+        const result = await sessionManager.sendMediaMessage(agentId, toPhone, {
+          type: mediaType || 'image',
+          url: mediaUrl,
+          fileName,
+          caption: caption || text || '',
+        });
+        return reply.send({
+          success: true,
+          messageId: result.messageId,
+        });
+      }
+
+      const result = await sessionManager.sendMessage(agentId, toPhone, text || '');
       return reply.send({
         success: true,
         messageId: result.messageId,
@@ -92,6 +112,44 @@ export function createWorkerServer(sessionManager: WhatsAppSessionManager): Fast
       return reply.status(500).send({
         success: false,
         error: err.message || 'Échec d\'envoi du message',
+      });
+    }
+  });
+
+  // 3a-bis. Envoi direct d'un message multimédia (image, PDF, audio)
+  app.post<{
+    Params: { agentId: string };
+    Body: {
+      toPhone: string;
+      mediaUrl: string;
+      mediaType?: 'image' | 'document' | 'audio';
+      fileName?: string;
+      caption?: string;
+    };
+  }>('/api/sessions/:agentId/send-media', async (request, reply) => {
+    const { agentId } = request.params;
+    const { toPhone, mediaUrl, mediaType, fileName, caption } = request.body || {};
+
+    if (!toPhone || !mediaUrl) {
+      return reply.status(400).send({ error: 'toPhone et mediaUrl sont requis' });
+    }
+
+    try {
+      const result = await sessionManager.sendMediaMessage(agentId, toPhone, {
+        type: mediaType || 'image',
+        url: mediaUrl,
+        fileName,
+        caption,
+      });
+      return reply.send({
+        success: true,
+        messageId: result.messageId,
+      });
+    } catch (err: any) {
+      request.log.error(err, `Erreur envoi média agent ${agentId}`);
+      return reply.status(500).send({
+        success: false,
+        error: err.message || 'Échec d\'envoi du média',
       });
     }
   });

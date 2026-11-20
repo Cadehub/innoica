@@ -270,7 +270,7 @@ export class AutomationEngine {
   }
 
   /**
-   * Executes the steps of a workflow sequentially
+   * Executes the steps of a workflow sequentially or following DAG branching
    */
   public async runExecutionSteps(
     execution: WorkflowExecution,
@@ -279,8 +279,23 @@ export class AutomationEngine {
     const steps = workflow.steps || [];
     let currentIndex = execution.current_step_index || 0;
     const variables = { ...execution.variables };
+    let executionCycles = 0;
+    const MAX_CYCLES = 50; // Protection anti-boucle infinie
 
-    while (currentIndex < steps.length) {
+    while (currentIndex >= 0 && currentIndex < steps.length) {
+      executionCycles++;
+      if (executionCycles > MAX_CYCLES) {
+        await this.supabase
+          .from('workflow_executions')
+          .update({
+            status: 'failed',
+            completed_at: new Date().toISOString(),
+            error_details: { error: 'Dépassement du quota maximal d’étapes (boucle infinie détectée)' },
+          })
+          .eq('id', execution.id);
+        return;
+      }
+
       const step = steps[currentIndex];
       const t0 = Date.now();
 
@@ -309,8 +324,17 @@ export class AutomationEngine {
 
       const durationMs = Date.now() - t0;
 
-      // Cas 1 : L'action attend une réponse asynchrone (wait_for_message)
+      // Cas 1 : L'action attend une réponse asynchrone (wait_for_message ou wait_delay)
       if (result.isWaiting && result.waitingContext) {
+        const expectedPhone =
+          (result.waitingContext.expected_phone as string) ||
+          (result.waitingContext.expected_sender as string) ||
+          null;
+        const correlationKey =
+          (result.waitingContext.correlation_key as string) ||
+          execution.correlation_id ||
+          `corr_${execution.id}`;
+
         await this.supabase
           .from('workflow_execution_logs')
           .update({
@@ -326,6 +350,8 @@ export class AutomationEngine {
             status: 'waiting',
             current_step_index: currentIndex,
             waiting_context: result.waitingContext,
+            expected_sender_phone: expectedPhone,
+            correlation_id: correlationKey,
             variables,
           })
           .eq('id', execution.id);
@@ -399,7 +425,33 @@ export class AutomationEngine {
         })
         .eq('id', stepLog?.id);
 
-      currentIndex++;
+      // Résolution du DAG : Vérifier les branches conditionnelles puis le next_step_id
+      let nextStepId: string | undefined;
+      const branches = (step as any).branches as Array<{ condition?: WorkflowCondition; next_step_id: string }> | undefined;
+      if (branches && branches.length > 0) {
+        for (const branch of branches) {
+          if (!branch.condition || this.evaluateCondition(branch.condition, variables)) {
+            nextStepId = branch.next_step_id;
+            break;
+          }
+        }
+      }
+
+      if (!nextStepId && step.next_step_id) {
+        nextStepId = step.next_step_id;
+      }
+
+      if (nextStepId) {
+        const nextIdx = steps.findIndex((s) => s.id === nextStepId);
+        if (nextIdx !== -1) {
+          currentIndex = nextIdx;
+        } else {
+          // Si le step ID ciblé n'existe pas, arrêt du DAG
+          break;
+        }
+      } else {
+        currentIndex++;
+      }
     }
 
     // Toutes les étapes ont été complétées avec succès
@@ -438,8 +490,18 @@ export class AutomationEngine {
       [varName]: replyPayload,
     };
 
-    // Passer à l'étape suivante
-    execution.current_step_index += 1;
+    // Déterminer la prochaine étape du workflow (DAG)
+    const workflow = execution.workflow as WorkflowDefinition;
+    const currentStep = workflow.steps?.[execution.current_step_index];
+    let nextIndex = execution.current_step_index + 1;
+    if (currentStep?.next_step_id) {
+      const idx = workflow.steps.findIndex((s) => s.id === currentStep.next_step_id);
+      if (idx !== -1) {
+        nextIndex = idx;
+      }
+    }
+
+    execution.current_step_index = nextIndex;
     execution.status = 'running';
     execution.variables = updatedVariables;
     execution.waiting_context = null;
@@ -448,7 +510,7 @@ export class AutomationEngine {
       .from('workflow_executions')
       .update({
         status: 'running',
-        current_step_index: execution.current_step_index,
+        current_step_index: nextIndex,
         waiting_context: null,
         variables: updatedVariables,
       })
@@ -465,11 +527,12 @@ export class AutomationEngine {
   public async checkAndResumeWaitingWorkflows(
     agentId: string,
     senderPhone: string,
-    messageText: string
+    messageText: string,
+    correlationId?: string
   ): Promise<number> {
     const { data: waitingExecs } = await this.supabase
       .from('workflow_executions')
-      .select('id, waiting_context')
+      .select('id, waiting_context, correlation_id, expected_sender_phone')
       .eq('status', 'waiting')
       .eq('agent_id', agentId);
 
@@ -482,10 +545,22 @@ export class AutomationEngine {
       const waitCtx = exec.waiting_context as Record<string, unknown> | null;
       if (!waitCtx) continue;
 
-      const expPhone = String(waitCtx.expected_phone || '').replace(/\D/g, '');
+      // 1. Correspondance par correlationId explicite
+      if (correlationId && (exec.correlation_id === correlationId || waitCtx.correlation_key === correlationId)) {
+        const resumed = await this.resumeWaitingExecution(exec.id, {
+          text: messageText,
+          sender: senderPhone,
+          correlation_id: correlationId,
+          received_at: new Date().toISOString(),
+        });
+        if (resumed) resumedCount++;
+        continue;
+      }
+
+      // 2. Correspondance par numéro de téléphone
+      const expPhone = String(exec.expected_sender_phone || waitCtx.expected_phone || '').replace(/\D/g, '');
       const expSender = String(waitCtx.expected_sender || '').replace(/\D/g, '');
 
-      // Correspondance de l'expéditeur attendu (ou tout expéditeur si non contraint)
       if (!expPhone && !expSender || expPhone === cleanSender || expSender === cleanSender) {
         const resumed = await this.resumeWaitingExecution(exec.id, {
           text: messageText,

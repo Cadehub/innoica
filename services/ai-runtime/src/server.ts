@@ -6,8 +6,9 @@ import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import { AIOrchestrator } from './orchestrator.js';
 import { testProviderKey } from './adapters/index.js';
-import { AIProvider, compileNaturalInstruction, TriggerType } from '@innoica/shared';
+import { AIProvider, TriggerType } from '@innoica/shared';
 import { AutomationEngine } from './automation/engine.js';
+import { AIWorkflowCompiler } from './automation/ai-compiler.js';
 
 export function createAIRuntimeServer(orchestrator: AIOrchestrator): FastifyInstance {
   const app = Fastify({
@@ -102,6 +103,7 @@ export function createAIRuntimeServer(orchestrator: AIOrchestrator): FastifyInst
 
   // 3. Automation Engine Endpoints
   const automationEngine = new AutomationEngine();
+  const aiCompiler = new AIWorkflowCompiler();
 
   // 3.1 Compiler une consigne en langage naturel
   app.post<{
@@ -116,7 +118,7 @@ export function createAIRuntimeServer(orchestrator: AIOrchestrator): FastifyInst
     if (!instruction) {
       return reply.status(400).send({ error: 'Instruction requise' });
     }
-    const result = compileNaturalInstruction(instruction, {
+    const result = await aiCompiler.compile(instruction, {
       agentId,
       preferredDomain,
       locale,

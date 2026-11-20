@@ -18,6 +18,9 @@ describe('innoica-whatsapp-worker API Tests', () => {
       sendMessage: vi.fn().mockResolvedValue({
         messageId: 'WA-MSG-998877',
       }),
+      sendMediaMessage: vi.fn().mockResolvedValue({
+        messageId: 'WA-MSG-MEDIA-123',
+      }),
       sendPresence: vi.fn().mockResolvedValue(undefined),
       destroySession: vi.fn().mockResolvedValue(undefined),
     } as unknown as WhatsAppSessionManager;
@@ -90,6 +93,26 @@ describe('innoica-whatsapp-worker API Tests', () => {
     const body = JSON.parse(res.body);
     expect(body.success).toBe(true);
     expect(body.messageId).toBe('WA-MSG-998877');
+  });
+
+  it('POST /api/sessions/:agentId/send-media should send media attachment and return messageId', async () => {
+    const app = createWorkerServer(sessionManagerMock);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/sessions/a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11/send-media',
+      payload: {
+        toPhone: '+237691234567',
+        mediaUrl: 'https://example.com/catalog.pdf',
+        mediaType: 'document',
+        fileName: 'catalogue.pdf',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.success).toBe(true);
+    expect(body.messageId).toBe('WA-MSG-MEDIA-123');
+    expect(sessionManagerMock.sendMediaMessage).toHaveBeenCalled();
   });
 
   it('POST /api/sessions/:agentId/disconnect should revoke session cleanly', async () => {
