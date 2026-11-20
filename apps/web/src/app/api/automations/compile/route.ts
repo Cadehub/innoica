@@ -12,8 +12,16 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
-    const parsed = CompileNaturalInstructionSchema.safeParse(body);
+    const rawBody = await req.json();
+    const normalizedAgentId = rawBody.agent_id || rawBody.agentId || undefined;
+    const cleanAgentId = normalizedAgentId && typeof normalizedAgentId === 'string' && normalizedAgentId.trim() !== ''
+      ? normalizedAgentId.trim()
+      : undefined;
+
+    const parsed = CompileNaturalInstructionSchema.safeParse({
+      ...rawBody,
+      agent_id: cleanAgentId,
+    });
 
     if (!parsed.success) {
       return NextResponse.json(
@@ -31,7 +39,8 @@ export async function POST(req: NextRequest) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           instruction,
-          agentId: agent_id,
+          agentId: agent_id || undefined,
+          workspaceId: ctx.workspace.id,
           preferredDomain: preferred_domain,
           locale: 'fr',
         }),

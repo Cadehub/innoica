@@ -230,7 +230,7 @@ export class WhatsAppMessageHandler {
 
     const textContent = this.extractMessageText(msg.message);
     if (textContent.trim()) {
-      // 1. Vérifier si ce message réveille un workflow en attente (wait_for_message)
+      // 1. Vérifier si ce message réveille un workflow en attente (wait_for_message) ou si un état d'attente est actif
       try {
         const checkRes = await fetch(`${this.aiRuntimeEndpoint}/api/automation/check-waiting`, {
           method: 'POST',
@@ -242,7 +242,7 @@ export class WhatsAppMessageHandler {
           }),
         });
         const checkData = (await checkRes.json().catch(() => ({}))) as Record<string, unknown>;
-        if (Number(checkData?.resumedCount || 0) > 0) {
+        if (Number(checkData?.resumedCount || 0) > 0 || Boolean(checkData?.isWaiting)) {
           if (this.presenceSender && destinationJid) {
             this.presenceSender(agentId, destinationJid, 'paused').catch(() => {});
           }
@@ -359,7 +359,7 @@ export class WhatsAppMessageHandler {
         idempotencyKey: `auto:${idempotencyKey}`,
       });
 
-      if (autoRes.hasWaitingWorkflow) {
+      if (autoRes.hasWaitingWorkflow || autoRes.executionsCount > 0) {
         handledByWaitingAutomation = true;
       }
     }
@@ -434,6 +434,26 @@ export class WhatsAppMessageHandler {
     if (controlMode === 'human_takeover' || controlMode === 'paused') {
       console.info(`[Message-Handler] Conversation ${conversationId} en mode ${controlMode}. Image non traitée par l'IA.`);
       return;
+    }
+
+    // Vérifier si un état d'attente d'automatisation est actif (mutisme de l'IA conversationnelle)
+    try {
+      const checkRes = await fetch(`${this.aiRuntimeEndpoint}/api/automation/check-waiting`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: params.agentId,
+          senderPhone: params.contactPhoneNumber,
+          conversationId,
+        }),
+      });
+      const checkData = (await checkRes.json().catch(() => ({}))) as Record<string, unknown>;
+      if (Number(checkData?.resumedCount || 0) > 0 || Boolean(checkData?.isWaiting)) {
+        console.info(`[Message-Handler] Workflow en attente actif pour ${params.contactPhoneNumber}. IA muette sur photo.`);
+        return;
+      }
+    } catch {
+      // Non-bloquant
     }
 
     const idempotencyKey = params.waMessageId ? `wa:${params.agentId}:${params.waMessageId}` : `msg:${messageId}`;
@@ -630,6 +650,26 @@ export class WhatsAppMessageHandler {
     if (controlMode === 'human_takeover' || controlMode === 'paused') {
       console.info(`[Message-Handler] Conversation ${conversationId} en mode ${controlMode}. Audio non téléchargé.`);
       return;
+    }
+
+    // Vérifier si un état d'attente d'automatisation est actif (mutisme de l'IA conversationnelle)
+    try {
+      const checkRes = await fetch(`${this.aiRuntimeEndpoint}/api/automation/check-waiting`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: params.agentId,
+          senderPhone: params.contactPhoneNumber,
+          conversationId,
+        }),
+      });
+      const checkData = (await checkRes.json().catch(() => ({}))) as Record<string, unknown>;
+      if (Number(checkData?.resumedCount || 0) > 0 || Boolean(checkData?.isWaiting)) {
+        console.info(`[Message-Handler] Workflow en attente actif pour ${params.contactPhoneNumber}. IA muette sur audio.`);
+        return;
+      }
+    } catch {
+      // Non-bloquant
     }
 
     const idempotencyKey = params.waMessageId ? `wa:${params.agentId}:${params.waMessageId}` : `msg:${messageId}`;

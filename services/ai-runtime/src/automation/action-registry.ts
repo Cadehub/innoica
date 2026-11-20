@@ -51,6 +51,28 @@ export class ActionRegistry {
     const { action_type, payload } = context.step;
     const { variables, agentId, whatsappWorkerUrl } = context;
 
+    const isGroupAdminAction = action_type === 'kick_group_participant' || action_type === 'update_group_settings';
+    const needsHumanApproval =
+      (context.step.require_approval === true || (isGroupAdminAction && context.step.require_approval !== false)) &&
+      !(context as any).approvalGranted;
+
+    if (needsHumanApproval) {
+      return {
+        success: true,
+        needsApproval: true,
+        approvalPayload: {
+          action_type,
+          step_id: context.step.id,
+          step_name: context.step.name,
+          target: payload,
+          reason: isGroupAdminAction
+            ? 'Opération administrative de groupe soumise à confirmation humaine.'
+            : `Étape "${context.step.name}" soumise à confirmation humaine.`,
+        },
+        output: { paused_for_approval: true },
+      };
+    }
+
     switch (action_type) {
       // 1. Envoyer un message WhatsApp privé (texte ou multimédia)
       case 'send_private_message': {

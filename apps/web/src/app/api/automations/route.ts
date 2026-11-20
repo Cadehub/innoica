@@ -67,6 +67,9 @@ export async function POST(req: NextRequest) {
         steps: parsed.data.steps,
         status: parsed.data.status,
         priority: parsed.data.priority,
+        version: parsed.data.version || 1,
+        is_active_version: parsed.data.is_active_version ?? true,
+        parent_workflow_id: parsed.data.parent_workflow_id || null,
       })
       .select()
       .single();

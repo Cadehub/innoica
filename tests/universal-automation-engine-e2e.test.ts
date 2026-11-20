@@ -343,4 +343,261 @@ describe('Universal Automation Engine & Async Correlation E2E Suite', () => {
       fetchSpy.mockRestore();
     });
   });
+
+  describe('6. Delays, Timeouts & Human Approvals Engine Suite', () => {
+    it('sweeps and resumes expired wait_delay workflows automatically', async () => {
+      const expiredDelayExec = {
+        id: 'exec_delay_expired',
+        status: 'waiting',
+        current_step_index: 0,
+        waiting_context: {
+          waiting_for_action: 'wait_delay',
+          resume_at: new Date(Date.now() - 5000).toISOString(), // 5s in the past
+        },
+        workflow: {
+          id: 'wf_delay',
+          steps: [
+            { id: 'step_1', action_type: 'wait_delay', payload: { delay_seconds: 5 }, next_step_id: 'step_2' },
+            { id: 'step_2', action_type: 'generate_business_report', payload: {} },
+          ],
+        },
+      };
+
+      const updateMock = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) });
+      (engine as any).supabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'workflow_executions') {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ data: [expiredDelayExec], error: null }),
+              }),
+              update: updateMock,
+            };
+          }
+          if (table === 'workflow_execution_logs') {
+            return {
+              insert: vi.fn().mockReturnValue({
+                select: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({ data: { id: 'log_mock' }, error: null }),
+                }),
+              }),
+              update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({}) }),
+            };
+          }
+          return { select: vi.fn() };
+        }),
+      };
+
+      const runStepsSpy = vi.spyOn(engine, 'runExecutionSteps').mockResolvedValue();
+
+      const result = await engine.processWaitingTimeoutsAndDelays();
+      expect(result.resumedDelays).toBe(1);
+      expect(runStepsSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'exec_delay_expired',
+          status: 'running',
+          current_step_index: 1,
+        }),
+        expect.anything()
+      );
+    });
+
+    it('marks expired wait_for_message executions as failed when supplier never replies', async () => {
+      const expiredWaitExec = {
+        id: 'exec_timeout_expired',
+        status: 'waiting',
+        current_step_index: 0,
+        waiting_context: {
+          waiting_for_action: 'wait_for_message',
+          timeout_at: new Date(Date.now() - 10000).toISOString(), // 10s in the past
+        },
+        workflow: {
+          id: 'wf_supplier',
+          steps: [
+            { id: 'step_1', action_type: 'wait_for_message', payload: {}, on_error: 'fail' },
+          ],
+        },
+      };
+
+      const updateMock = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) });
+      (engine as any).supabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'workflow_executions') {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ data: [expiredWaitExec], error: null }),
+              }),
+              update: updateMock,
+            };
+          }
+          return { select: vi.fn() };
+        }),
+      };
+
+      const result = await engine.processWaitingTimeoutsAndDelays();
+      expect(result.timedOutWaitings).toBe(1);
+      expect(updateMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'failed',
+          error_details: expect.objectContaining({
+            error: expect.stringContaining('timeout expiré'),
+          }),
+        })
+      );
+    });
+
+    it('resumes workflow execution seamlessly upon human approval', async () => {
+      const pendingApprovalExec = {
+        id: 'exec_approval_1',
+        status: 'needs_approval',
+        current_step_index: 0,
+        workflow: {
+          id: 'wf_admin',
+          steps: [
+            { id: 'step_admin_action', action_type: 'kick_group_participant', require_approval: true, next_step_id: 'step_done' },
+            { id: 'step_done', action_type: 'generate_business_report' },
+          ],
+        },
+      };
+
+      const updateExecMock = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) });
+      (engine as any).supabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'workflow_executions') {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({ data: pendingApprovalExec, error: null }),
+                }),
+              }),
+              update: updateExecMock,
+            };
+          }
+          if (table === 'workflow_execution_logs') {
+            return {
+              update: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockResolvedValue({}),
+                }),
+              }),
+            };
+          }
+          return { select: vi.fn() };
+        }),
+      };
+
+      const runSpy = vi.spyOn(engine, 'runExecutionSteps').mockResolvedValue();
+
+      const ok = await engine.resumeApprovedExecution('exec_approval_1', 'approved', 'user_admin_123');
+      expect(ok).toBe(true);
+      expect(runSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'exec_approval_1',
+          status: 'running',
+          current_step_index: 1,
+        }),
+        expect.anything()
+      );
+    });
+
+    it('detects active waiting workflow to mute conversational AI', async () => {
+      const waitingExec = {
+        id: 'exec_wait_customer',
+        agent_id: 'agent_active_1',
+        expected_sender_phone: '+237699112233',
+        variables: {
+          contact: { phone: '+237654321000' },
+          conversationId: 'conv_123_abc',
+        },
+      };
+
+      (engine as any).supabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'workflow_executions') {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  in: vi.fn().mockResolvedValue({ data: [waitingExec], error: null }),
+                }),
+              }),
+            };
+          }
+          return { select: vi.fn() };
+        }),
+      };
+
+      // Matched by customer contact phone
+      const isWaitingByPhone = await engine.hasActiveWaitingWorkflow('agent_active_1', '+237654321000');
+      expect(isWaitingByPhone).toBe(true);
+
+      // Matched by conversationId
+      const isWaitingByConv = await engine.hasActiveWaitingWorkflow('agent_active_1', undefined, 'conv_123_abc');
+      expect(isWaitingByConv).toBe(true);
+
+      // Unmatched phone returns false
+      const isWaitingOther = await engine.hasActiveWaitingWorkflow('agent_active_1', '+237677999888');
+      expect(isWaitingOther).toBe(false);
+    });
+
+    it('mutates execution.status in memory when transitioning to waiting state', async () => {
+      const waitingWorkflow: WorkflowDefinition = {
+        id: 'wf_wait_state',
+        workspace_id: 'ws_test',
+        agent_id: 'agent_test',
+        name: 'Wait State Test',
+        description: null,
+        domain: 'suppliers',
+        natural_instruction: 'Wait for supplier',
+        trigger_type: 'wa_private_message_received',
+        trigger_config: {},
+        conditions: [],
+        steps: [
+          {
+            id: 'step_wait',
+            name: 'Attendre fournisseur',
+            action_type: 'wait_for_message',
+            payload: { timeout_minutes: 30, expected_phone: '+237699000000' },
+          },
+        ],
+        status: 'active',
+        priority: 1,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const execution: WorkflowExecution = {
+        id: 'exec_in_memory_test',
+        workspace_id: 'ws_test',
+        workflow_id: 'wf_wait_state',
+        agent_id: 'agent_test',
+        status: 'running',
+        trigger_event: 'wa_private_message_received',
+        trigger_payload: {},
+        current_step_index: 0,
+        variables: {},
+        waiting_context: null,
+        error_details: null,
+        started_at: new Date().toISOString(),
+        completed_at: null,
+        created_at: new Date().toISOString(),
+      };
+
+      (engine as any).supabase = {
+        from: vi.fn(() => ({
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { id: 'log_mock' }, error: null }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({}) }),
+        })),
+      };
+
+      await engine.runExecutionSteps(execution, waitingWorkflow);
+
+      // CRITICAL CHECK: In-memory execution object must reflect status 'waiting'
+      expect(execution.status).toBe('waiting');
+      expect(execution.expected_sender_phone).toBe('+237699000000');
+    });
+  });
 });

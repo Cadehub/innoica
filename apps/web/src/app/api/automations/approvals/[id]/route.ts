@@ -62,6 +62,22 @@ export async function POST(
         .eq('id', approval.execution_id);
     }
 
+    // 3. Notifier l'AI Runtime pour reprendre le flux DAG
+    const aiRuntimeUrl = process.env.AI_RUNTIME_URL || 'http://localhost:4002';
+    try {
+      await fetch(`${aiRuntimeUrl}/api/automation/resume-approval`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          executionId: approval.execution_id,
+          decision,
+          approverId: user.user?.id || null,
+        }),
+      });
+    } catch (notifyErr) {
+      console.error('[Approvals] Erreur notification AI Runtime:', notifyErr);
+    }
+
     return NextResponse.json({ success: true, decision, approval });
   } catch (err: unknown) {
     return NextResponse.json(

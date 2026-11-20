@@ -285,6 +285,7 @@ export class AutomationEngine {
     while (currentIndex >= 0 && currentIndex < steps.length) {
       executionCycles++;
       if (executionCycles > MAX_CYCLES) {
+        execution.status = 'failed';
         await this.supabase
           .from('workflow_executions')
           .update({
@@ -335,6 +336,13 @@ export class AutomationEngine {
           execution.correlation_id ||
           `corr_${execution.id}`;
 
+        execution.status = 'waiting';
+        execution.current_step_index = currentIndex;
+        execution.waiting_context = result.waitingContext;
+        execution.expected_sender_phone = expectedPhone;
+        execution.correlation_id = correlationKey;
+        execution.variables = variables;
+
         await this.supabase
           .from('workflow_execution_logs')
           .update({
@@ -361,6 +369,10 @@ export class AutomationEngine {
 
       // Cas 2 : L'action nécessite une approbation humaine
       if (result.needsApproval) {
+        execution.status = 'needs_approval';
+        execution.current_step_index = currentIndex;
+        execution.variables = variables;
+
         await this.supabase.from('workflow_approvals').insert({
           workspace_id: execution.workspace_id,
           execution_id: execution.id,
@@ -399,6 +411,10 @@ export class AutomationEngine {
           currentIndex++;
           continue;
         }
+
+        execution.status = 'failed';
+        execution.completed_at = new Date().toISOString();
+        execution.error_details = { step_index: currentIndex, error: result.error };
 
         await this.supabase
           .from('workflow_executions')
@@ -455,6 +471,11 @@ export class AutomationEngine {
     }
 
     // Toutes les étapes ont été complétées avec succès
+    execution.status = 'succeeded';
+    execution.current_step_index = currentIndex;
+    execution.completed_at = new Date().toISOString();
+    execution.variables = variables;
+
     await this.supabase
       .from('workflow_executions')
       .update({
@@ -516,9 +537,232 @@ export class AutomationEngine {
       })
       .eq('id', executionId);
 
+    // Mettre à jour le log de l'étape d'attente qui vient de se terminer avec succès
+    await this.supabase
+      .from('workflow_execution_logs')
+      .update({
+        status: 'succeeded',
+        output_payload: replyPayload,
+      })
+      .eq('execution_id', executionId)
+      .eq('step_index', (execution.current_step_index || 1) - 1);
+
     // Reprendre la suite du workflow
     await this.runExecutionSteps(execution as WorkflowExecution, execution.workflow as WorkflowDefinition);
     return true;
+  }
+
+  /**
+   * Resumes an execution after human approval
+   */
+  public async resumeApprovedExecution(
+    executionId: string,
+    decision: 'approved' | 'rejected',
+    approverId?: string
+  ): Promise<boolean> {
+    const { data: execution } = await this.supabase
+      .from('workflow_executions')
+      .select('*, workflow:workflow_definitions(*)')
+      .eq('id', executionId)
+      .single();
+
+    if (!execution || !execution.workflow) return false;
+
+    if (decision === 'rejected') {
+      execution.status = 'cancelled';
+      await this.supabase
+        .from('workflow_executions')
+        .update({
+          status: 'cancelled',
+          completed_at: new Date().toISOString(),
+          error_details: { reason: 'Refusé par l’opérateur humain', rejected_by: approverId },
+        })
+        .eq('id', executionId);
+      return true;
+    }
+
+    // Si approuvé, avancer à l'étape suivante
+    const workflow = execution.workflow as WorkflowDefinition;
+    const currentStep = workflow.steps?.[execution.current_step_index];
+    let nextIndex = execution.current_step_index + 1;
+    if (currentStep?.next_step_id) {
+      const idx = workflow.steps.findIndex((s) => s.id === currentStep.next_step_id);
+      if (idx !== -1) {
+        nextIndex = idx;
+      }
+    }
+
+    execution.current_step_index = nextIndex;
+    execution.status = 'running';
+
+    await this.supabase
+      .from('workflow_executions')
+      .update({
+        status: 'running',
+        current_step_index: nextIndex,
+      })
+      .eq('id', executionId);
+
+    // Mettre à jour le log de l'étape d'approbation
+    await this.supabase
+      .from('workflow_execution_logs')
+      .update({
+        status: 'succeeded',
+        output_payload: { approved: true, approved_by: approverId, approved_at: new Date().toISOString() },
+      })
+      .eq('execution_id', executionId)
+      .eq('step_index', (execution.current_step_index || 1) - 1);
+
+    // Reprendre la suite du workflow
+    await this.runExecutionSteps(execution as WorkflowExecution, execution.workflow as WorkflowDefinition);
+    return true;
+  }
+
+  /**
+   * Checks if there is an active waiting workflow execution for this agent and contact/conversation
+   */
+  public async hasActiveWaitingWorkflow(
+    agentId: string,
+    contactPhone?: string,
+    conversationId?: string
+  ): Promise<boolean> {
+    const { data: waitingExecs } = await this.supabase
+      .from('workflow_executions')
+      .select('id, expected_sender_phone, variables')
+      .eq('agent_id', agentId)
+      .in('status', ['waiting', 'needs_approval']);
+
+    if (!waitingExecs || waitingExecs.length === 0) return false;
+
+    const cleanContact = (contactPhone || '').replace(/\D/g, '');
+
+    for (const exec of waitingExecs) {
+      if (cleanContact) {
+        const expPhone = String(exec.expected_sender_phone || '').replace(/\D/g, '');
+        if (expPhone && expPhone === cleanContact) return true;
+
+        const vars = exec.variables as Record<string, unknown> | null;
+        const cPhone = String((vars?.contact as Record<string, unknown>)?.phone || vars?.contactPhoneNumber || '').replace(/\D/g, '');
+        if (cPhone && cPhone === cleanContact) return true;
+      }
+
+      if (conversationId) {
+        const vars = exec.variables as Record<string, unknown> | null;
+        const convId = (vars?.trigger as Record<string, unknown>)?.conversationId || vars?.conversationId;
+        if (convId && String(convId) === String(conversationId)) return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Sweeps and processes pending delayed workflows and timed-out waiting workflows
+   */
+  public async processWaitingTimeoutsAndDelays(): Promise<{
+    resumedDelays: number;
+    timedOutWaitings: number;
+  }> {
+    const now = new Date();
+    const { data: waitingExecs } = await this.supabase
+      .from('workflow_executions')
+      .select('*, workflow:workflow_definitions(*)')
+      .eq('status', 'waiting');
+
+    if (!waitingExecs || waitingExecs.length === 0) {
+      return { resumedDelays: 0, timedOutWaitings: 0 };
+    }
+
+    let resumedDelays = 0;
+    let timedOutWaitings = 0;
+
+    for (const exec of waitingExecs) {
+      const waitCtx = exec.waiting_context as Record<string, unknown> | null;
+      if (!waitCtx || !exec.workflow) continue;
+
+      const action = waitCtx.waiting_for_action as string;
+
+      // 1. Temporisation wait_delay expirée -> reprendre le workflow
+      if (action === 'wait_delay' && waitCtx.resume_at) {
+        const resumeAt = new Date(waitCtx.resume_at as string);
+        if (now >= resumeAt) {
+          const workflow = exec.workflow as WorkflowDefinition;
+          const currentStep = workflow.steps?.[exec.current_step_index];
+          let nextIndex = exec.current_step_index + 1;
+          if (currentStep?.next_step_id) {
+            const idx = workflow.steps.findIndex((s) => s.id === currentStep.next_step_id);
+            if (idx !== -1) {
+              nextIndex = idx;
+            }
+          }
+
+          exec.current_step_index = nextIndex;
+          exec.status = 'running';
+          exec.waiting_context = null;
+
+          await this.supabase
+            .from('workflow_executions')
+            .update({
+              status: 'running',
+              current_step_index: nextIndex,
+              waiting_context: null,
+            })
+            .eq('id', exec.id);
+
+          await this.runExecutionSteps(exec as WorkflowExecution, workflow);
+          resumedDelays++;
+          continue;
+        }
+      }
+
+      // 2. Timeout wait_for_message dépassé -> échouer ou basculer sur branche fallback
+      if (action === 'wait_for_message' && waitCtx.timeout_at) {
+        const timeoutAt = new Date(waitCtx.timeout_at as string);
+        if (now >= timeoutAt) {
+          const workflow = exec.workflow as WorkflowDefinition;
+          const currentStep = workflow.steps?.[exec.current_step_index];
+
+          if (currentStep?.on_error === 'continue') {
+            let nextIndex = exec.current_step_index + 1;
+            if (currentStep.next_step_id) {
+              const idx = workflow.steps.findIndex((s) => s.id === currentStep.next_step_id);
+              if (idx !== -1) nextIndex = idx;
+            }
+            exec.current_step_index = nextIndex;
+            exec.status = 'running';
+            exec.waiting_context = null;
+
+            await this.supabase
+              .from('workflow_executions')
+              .update({
+                status: 'running',
+                current_step_index: nextIndex,
+                waiting_context: null,
+              })
+              .eq('id', exec.id);
+
+            await this.runExecutionSteps(exec as WorkflowExecution, workflow);
+          } else {
+            exec.status = 'failed';
+            await this.supabase
+              .from('workflow_executions')
+              .update({
+                status: 'failed',
+                completed_at: now.toISOString(),
+                error_details: {
+                  error: 'Délai d’attente dépassé (timeout expiré)',
+                  timeout_at: waitCtx.timeout_at,
+                  step_index: exec.current_step_index,
+                },
+              })
+              .eq('id', exec.id);
+          }
+          timedOutWaitings++;
+        }
+      }
+    }
+
+    return { resumedDelays, timedOutWaitings };
   }
 
   /**

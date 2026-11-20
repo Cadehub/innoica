@@ -84,14 +84,11 @@ export class AIWorkflowCompiler {
     }
   ): Promise<NaturalInstructionCompileResult> {
     const fallback = compileNaturalInstruction(instruction, options);
-    if (!options?.agentId && !options?.workspaceId) {
-      return fallback;
-    }
 
     try {
       // 1. Récupérer les identifiants IA de l'agent ou du workspace
       let agent: any = null;
-      if (options.agentId) {
+      if (options?.agentId) {
         const { data } = await this.supabase
           .from('agents')
           .select('workspace_id, ai_provider, ai_model')
@@ -100,19 +97,22 @@ export class AIWorkflowCompiler {
         agent = data;
       }
 
-      const workspaceId = options.workspaceId || agent?.workspace_id;
-      if (!workspaceId) return fallback;
-
+      const workspaceId = options?.workspaceId || agent?.workspace_id;
       const provider: AIProvider = (agent?.ai_provider as AIProvider) || 'groq';
-      const { data: cred } = await this.supabase
-        .from('ai_credentials')
-        .select('api_key')
-        .eq('workspace_id', workspaceId)
-        .eq('provider', provider)
-        .eq('is_valid', true)
-        .maybeSingle();
+      let apiKey: string | undefined;
 
-      const apiKey = cred?.api_key || process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY;
+      if (workspaceId) {
+        const { data: cred } = await this.supabase
+          .from('ai_credentials')
+          .select('api_key')
+          .eq('workspace_id', workspaceId)
+          .eq('provider', provider)
+          .eq('is_valid', true)
+          .maybeSingle();
+        apiKey = cred?.api_key;
+      }
+
+      apiKey = apiKey || process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY;
       if (!apiKey) {
         return fallback;
       }
