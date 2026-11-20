@@ -10,7 +10,7 @@ import {
   TriggerType,
   WorkflowCondition,
   WorkflowStep,
-} from '../types/automation.js';
+} from '../types/automation';
 
 interface CompileOptions {
   agentId?: string | null;

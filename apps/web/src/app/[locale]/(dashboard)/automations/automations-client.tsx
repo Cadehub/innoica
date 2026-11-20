@@ -270,7 +270,7 @@ export function AutomationsClient({
               activeTab === 'nlp' ? 'bg-white text-zinc-950 shadow-2xs' : 'text-zinc-600 hover:text-zinc-950'
             }`}
           >
-            <Sparkles className="h-3.5 w-3.5 text-zinc-800" />
+            <FileText className="h-3.5 w-3.5 text-zinc-800" />
             <span>Instructions Naturelles</span>
           </button>
 
@@ -339,7 +339,7 @@ export function AutomationsClient({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-sm sm:text-base font-semibold text-zinc-950 flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-zinc-900" />
+                  <Bot className="h-4 w-4 text-zinc-900" />
                   Programmer votre agent en langage naturel
                 </h2>
                 <p className="text-xs text-zinc-500 mt-0.5">
@@ -571,7 +571,7 @@ export function AutomationsClient({
 
           {filteredWorkflows.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-12 text-center space-y-3">
-              <Zap className="h-8 w-8 text-zinc-400 mx-auto" />
+              <Layers className="h-8 w-8 text-zinc-300 mx-auto" />
               <h3 className="text-sm font-semibold text-zinc-900">Aucune automatisation dans cette catégorie</h3>
               <p className="text-xs text-zinc-500 max-w-sm mx-auto">
                 Créez votre première règle en langage naturel dans l'onglet "Instructions Naturelles" ci-dessus.
