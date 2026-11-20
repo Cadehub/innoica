@@ -5,8 +5,10 @@
 
 import {
   CreateWorkflowSchema,
-  NaturalInstructionCompileResult,
   compileNaturalInstruction,
+} from '@innoica/shared';
+import type {
+  NaturalInstructionCompileResult,
   AIProvider,
   WorkflowDefinition,
 } from '@innoica/shared';

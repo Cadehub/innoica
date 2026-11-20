@@ -69,5 +69,19 @@ export {
 } from './schemas/index';
 export * from './types/ecommerce';
 export * from './types/automation';
+export {
+  AutomationDomainSchema,
+  TriggerTypeSchema,
+  ActionTypeSchema,
+  ConditionOperatorSchema,
+  WorkflowConditionSchema,
+  WorkflowStepBranchSchema,
+  WorkflowStepSchema,
+  WorkflowStatusSchema,
+  CreateWorkflowSchema,
+  CompileNaturalInstructionSchema,
+  WhatsAppGroupConfigSchema,
+  WhatsAppChannelConfigSchema,
+} from './schemas/automation';
 export * from './schemas/automation';
 export { compileNaturalInstruction } from './automation/compiler';

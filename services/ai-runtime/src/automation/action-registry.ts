@@ -3,7 +3,7 @@
 // Deterministic execution of authorized business operations
 // ====================================================================
 
-import { ActionType, WorkflowExecution, WorkflowStep } from '@innoica/shared';
+import type { ActionType, WorkflowExecution, WorkflowStep } from '@innoica/shared';
 import { validateUrlForSsrf } from '@innoica/shared/server';
 import { createWorkerSupabaseClient } from '@innoica/database';
 

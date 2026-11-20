@@ -3,7 +3,7 @@
 // Manages deterministic workflow execution, wait_for_message, and approvals
 // ====================================================================
 
-import {
+import type {
   ActionType,
   TriggerType,
   WorkflowCondition,

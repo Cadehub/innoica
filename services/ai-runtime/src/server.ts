@@ -6,7 +6,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import { AIOrchestrator } from './orchestrator.js';
 import { testProviderKey } from './adapters/index.js';
-import { AIProvider, TriggerType } from '@innoica/shared';
+import type { AIProvider, TriggerType } from '@innoica/shared';
 import { AutomationEngine } from './automation/engine.js';
 import { AIWorkflowCompiler } from './automation/ai-compiler.js';
 
