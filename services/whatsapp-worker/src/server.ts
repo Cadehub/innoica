@@ -131,5 +131,105 @@ export function createWorkerServer(sessionManager: WhatsAppSessionManager): Fast
     }
   });
 
+  // 5. Gestion des Groupes WhatsApp
+  // 5.1 Récupérer tous les groupes participants
+  app.get<{ Params: { agentId: string } }>('/api/sessions/:agentId/groups', async (request, reply) => {
+    const { agentId } = request.params;
+    try {
+      const groups = await sessionManager.fetchParticipatingGroups(agentId);
+      return reply.send({ success: true, groups });
+    } catch (err: any) {
+      return reply.status(500).send({ success: false, error: err.message });
+    }
+  });
+
+  // 5.2 Métadonnées détaillées d'un groupe
+  app.get<{ Params: { agentId: string; groupJid: string } }>(
+    '/api/sessions/:agentId/groups/:groupJid',
+    async (request, reply) => {
+      const { agentId, groupJid } = request.params;
+      try {
+        const metadata = await sessionManager.getGroupMetadata(agentId, groupJid);
+        return reply.send({ success: true, metadata });
+      } catch (err: any) {
+        return reply.status(500).send({ success: false, error: err.message });
+      }
+    }
+  );
+
+  // 5.3 Envoi d'un message dans un groupe
+  app.post<{
+    Params: { agentId: string };
+    Body: { groupJid: string; text: string };
+  }>('/api/sessions/:agentId/groups/send', async (request, reply) => {
+    const { agentId } = request.params;
+    const { groupJid, text } = request.body || {};
+
+    if (!groupJid || !text) {
+      return reply.status(400).send({ error: 'groupJid et text sont requis' });
+    }
+
+    try {
+      const result = await sessionManager.sendMessage(agentId, groupJid, text);
+      return reply.send({ success: true, messageId: result.messageId });
+    } catch (err: any) {
+      return reply.status(500).send({ success: false, error: err.message });
+    }
+  });
+
+  // 5.4 Gestion des participants (action = add | remove | promote | demote)
+  app.post<{
+    Params: { agentId: string };
+    Body: { groupJid: string; participants: string[]; action: 'add' | 'remove' | 'promote' | 'demote' };
+  }>('/api/sessions/:agentId/groups/participants', async (request, reply) => {
+    const { agentId } = request.params;
+    const { groupJid, participants, action } = request.body || {};
+
+    if (!groupJid || !participants || !action) {
+      return reply.status(400).send({ error: 'groupJid, participants et action sont requis' });
+    }
+
+    try {
+      const res = await sessionManager.manageGroupParticipants(agentId, groupJid, participants, action);
+      return reply.send({ success: true, result: res });
+    } catch (err: any) {
+      return reply.status(500).send({ success: false, error: err.message });
+    }
+  });
+
+  // 5.5 Paramètres de groupe (announcement | not_announcement | locked | unlocked)
+  app.post<{
+    Params: { agentId: string };
+    Body: { groupJid: string; setting: 'announcement' | 'not_announcement' | 'locked' | 'unlocked' };
+  }>('/api/sessions/:agentId/groups/settings', async (request, reply) => {
+    const { agentId } = request.params;
+    const { groupJid, setting } = request.body || {};
+
+    if (!groupJid || !setting) {
+      return reply.status(400).send({ error: 'groupJid et setting sont requis' });
+    }
+
+    try {
+      const res = await sessionManager.updateGroupSettings(agentId, groupJid, setting);
+      return reply.send({ success: true, result: res });
+    } catch (err: any) {
+      return reply.status(500).send({ success: false, error: err.message });
+    }
+  });
+
+  // 6. Chaînes WhatsApp (Newsletters)
+  app.get<{ Params: { agentId: string; channelJid: string } }>(
+    '/api/sessions/:agentId/channels/:channelJid',
+    async (request, reply) => {
+      const { agentId, channelJid } = request.params;
+      try {
+        const metadata = await sessionManager.getChannelMetadata(agentId, channelJid);
+        return reply.send({ success: true, metadata });
+      } catch (err: any) {
+        return reply.status(500).send({ success: false, error: err.message });
+      }
+    }
+  );
+
   return app;
 }

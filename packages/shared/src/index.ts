@@ -68,3 +68,5 @@ export {
   orderStatusTransitionSchema,
 } from './schemas/index';
 export * from './types/ecommerce';
+export * from './schemas/automation';
+export * from './automation/compiler';

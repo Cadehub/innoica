@@ -654,6 +654,121 @@ export class WhatsAppSessionManager {
   }
 
   /**
+   * Récupération de tous les groupes WhatsApp auxquels le compte participe
+   */
+  public async fetchParticipatingGroups(agentId: string) {
+    const session = this.sessions.get(agentId);
+    if (!session || session.status !== 'connected') {
+      throw new Error(`Agent ${agentId} n'est pas connecté à WhatsApp`);
+    }
+
+    const groups = await session.sock.groupFetchAllParticipating();
+    const myJid = session.sock.user?.id;
+    const myNumber = myJid ? myJid.split('@')[0].split(':')[0] : '';
+
+    return Object.values(groups).map((g) => {
+      const isBotAdmin = g.participants?.some(
+        (p: any) =>
+          (p.id?.includes(myNumber) || p.id === myJid) &&
+          (p.admin === 'admin' || p.admin === 'superadmin')
+      );
+      return {
+        id: g.id,
+        subject: g.subject,
+        subjectOwner: g.subjectOwner,
+        subjectTime: g.subjectTime,
+        size: g.size || g.participants?.length || 0,
+        creation: g.creation,
+        owner: g.owner,
+        desc: g.desc,
+        descId: g.descId,
+        restrict: g.restrict,
+        announce: g.announce,
+        isBotAdmin: Boolean(isBotAdmin),
+        participantsCount: g.participants?.length || 0,
+      };
+    });
+  }
+
+  /**
+   * Métadonnées détaillées d'un groupe spécifique
+   */
+  public async getGroupMetadata(agentId: string, groupJid: string) {
+    const session = this.sessions.get(agentId);
+    if (!session || session.status !== 'connected') {
+      throw new Error(`Agent ${agentId} n'est pas connecté à WhatsApp`);
+    }
+    return await session.sock.groupMetadata(groupJid);
+  }
+
+  /**
+   * Modification du sujet (nom) d'un groupe
+   */
+  public async updateGroupSubject(agentId: string, groupJid: string, subject: string) {
+    const session = this.sessions.get(agentId);
+    if (!session || session.status !== 'connected') {
+      throw new Error(`Agent ${agentId} n'est pas connecté à WhatsApp`);
+    }
+    return await session.sock.groupUpdateSubject(groupJid, subject);
+  }
+
+  /**
+   * Modification de la description d'un groupe
+   */
+  public async updateGroupDescription(agentId: string, groupJid: string, description: string) {
+    const session = this.sessions.get(agentId);
+    if (!session || session.status !== 'connected') {
+      throw new Error(`Agent ${agentId} n'est pas connecté à WhatsApp`);
+    }
+    return await session.sock.groupUpdateDescription(groupJid, description);
+  }
+
+  /**
+   * Gestion des participants d'un groupe (add, remove, promote, demote)
+   */
+  public async manageGroupParticipants(
+    agentId: string,
+    groupJid: string,
+    participants: string[],
+    action: 'add' | 'remove' | 'promote' | 'demote'
+  ) {
+    const session = this.sessions.get(agentId);
+    if (!session || session.status !== 'connected') {
+      throw new Error(`Agent ${agentId} n'est pas connecté à WhatsApp`);
+    }
+    const formattedParticipants = participants.map((p) =>
+      p.includes('@') ? p : `${normalizePhoneNumberForBaileys(p)}@s.whatsapp.net`
+    );
+    return await session.sock.groupParticipantsUpdate(groupJid, formattedParticipants, action);
+  }
+
+  /**
+   * Modification des paramètres de diffusion d'un groupe
+   */
+  public async updateGroupSettings(
+    agentId: string,
+    groupJid: string,
+    setting: 'announcement' | 'not_announcement' | 'locked' | 'unlocked'
+  ) {
+    const session = this.sessions.get(agentId);
+    if (!session || session.status !== 'connected') {
+      throw new Error(`Agent ${agentId} n'est pas connecté à WhatsApp`);
+    }
+    return await session.sock.groupSettingUpdate(groupJid, setting);
+  }
+
+  /**
+   * Métadonnées d'une chaîne WhatsApp (Newsletter)
+   */
+  public async getChannelMetadata(agentId: string, channelJid: string) {
+    const session = this.sessions.get(agentId);
+    if (!session || session.status !== 'connected') {
+      throw new Error(`Agent ${agentId} n'est pas connecté à WhatsApp`);
+    }
+    return await session.sock.newsletterMetadata('jid', channelJid);
+  }
+
+  /**
    * Déconnexion et révocation sécurisée de session
    */
   public async destroySession(agentId: string): Promise<void> {

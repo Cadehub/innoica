@@ -181,3 +181,4 @@ export const changeControlModeSchema = z.object({
 });
 
 export * from './ecommerce';
+export * from './automation';

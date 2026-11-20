@@ -20,6 +20,7 @@ import {
   PanelLeftOpen,
   Globe,
   ShoppingBag,
+  Zap,
 } from 'lucide-react';
 import { BrandLogo } from '@/components/brand-logo';
 import { PWAInstaller } from '@/components/pwa-installer';
@@ -62,6 +63,7 @@ export function DashboardShell({
   const navItems = [
     { href: '/dashboard', label: locale === 'en' ? 'Overview' : "Vue d'ensemble", icon: LayoutDashboard },
     { href: '/agents', label: locale === 'en' ? 'Agents' : 'Mes Agents', icon: Bot },
+    { href: '/automations', label: locale === 'en' ? 'Automations' : 'Automatisations', icon: Zap },
     { href: '/conversations', label: 'Inbox WhatsApp', icon: MessageSquare },
     { href: '/whatsapp', label: locale === 'en' ? 'WhatsApp Links' : 'Connexions WA', icon: Smartphone },
     ...(isStoreModuleEnabled

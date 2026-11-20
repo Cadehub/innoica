@@ -132,6 +132,17 @@ export class WhatsAppMessageHandler {
     const rawJid = msg.key?.remoteJid;
     if (!rawJid || !msg.message) return;
 
+    // 1. Filtrage et routage spécifique pour les Groupes WhatsApp (@g.us)
+    if (rawJid.endsWith('@g.us')) {
+      await this.handleIncomingGroupMessage(agentId, rawJid, msg);
+      return;
+    }
+
+    // 2. Filtrage des chaînes (@newsletter)
+    if (rawJid.endsWith('@newsletter')) {
+      return;
+    }
+
     const altJid = (msg.key as any)?.remoteJidAlt as string | undefined;
 
     // Normalisation de altJid s'il s'agit d'un JID ou d'un numéro brut
@@ -187,6 +198,28 @@ export class WhatsAppMessageHandler {
 
     const textContent = this.extractMessageText(msg.message);
     if (textContent.trim()) {
+      // 1. Vérifier si ce message réveille un workflow en attente (wait_for_message)
+      try {
+        const checkRes = await fetch(`${this.aiRuntimeEndpoint}/api/automation/check-waiting`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agentId,
+            senderPhone: contactPhoneNumber,
+            messageText: textContent,
+          }),
+        });
+        const checkData = (await checkRes.json().catch(() => ({}))) as Record<string, unknown>;
+        if (Number(checkData?.resumedCount || 0) > 0) {
+          if (this.presenceSender && destinationJid) {
+            this.presenceSender(agentId, destinationJid, 'paused').catch(() => {});
+          }
+          return;
+        }
+      } catch {
+        // Non-bloquant
+      }
+
       try {
         await this.handleIncomingTextMessage({
           agentId,
@@ -781,5 +814,87 @@ export class WhatsAppMessageHandler {
       p_error_code: errorCode,
       p_worker_secret: process.env.WORKER_INTERNAL_SECRET || null,
     });
+  }
+
+  /**
+   * Traitement sécurisé des messages reçus dans un Groupe WhatsApp (@g.us)
+   */
+  private async handleIncomingGroupMessage(
+    agentId: string,
+    groupJid: string,
+    msg: proto.IWebMessageInfo
+  ): Promise<void> {
+    // 1. Vérifier si le groupe est explicitement activé pour cet agent
+    const { data: config } = await this.supabase
+      .from('whatsapp_group_configs')
+      .select('*')
+      .eq('agent_id', agentId)
+      .eq('group_jid', groupJid)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (!config) {
+      // Aucun groupe non explicitement activé par l'utilisateur n'est surveillé
+      return;
+    }
+
+    const textContent = this.extractMessageText(msg.message);
+    const mentions = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+    const participantJid = (msg.key?.participant || (msg as any)?.participant || '') as string;
+    const cleanDigits = participantJid.replace(/@.*$/, '').replace(/:\d+$/, '').replace(/\D/g, '');
+    const participantPhone = `+${cleanDigits}`;
+
+    // 2. Vérifier les participants autorisés si une liste blanche est configurée
+    if (config.allowed_participants && config.allowed_participants.length > 0) {
+      const isAllowed = config.allowed_participants.some(
+        (p: string) => p === participantPhone || p === participantJid
+      );
+      if (!isAllowed) return;
+    }
+
+    // 3. Vérifier le mode de surveillance (mentions_only, keywords_only, all_messages)
+    let shouldRespond = false;
+    let triggerType = 'wa_group_message_received';
+
+    if (config.monitor_mode === 'all_messages') {
+      shouldRespond = true;
+    } else if (config.monitor_mode === 'keywords_only') {
+      const matched = (config.keywords || []).some((kw: string) =>
+        textContent.toLowerCase().includes(kw.toLowerCase())
+      );
+      if (matched) {
+        shouldRespond = true;
+        triggerType = 'wa_group_keyword_matched';
+      }
+    } else {
+      // Par défaut : mentions_only
+      const isMentioned = mentions.length > 0 || textContent.includes('@');
+      if (isMentioned) {
+        shouldRespond = true;
+        triggerType = 'wa_group_bot_mentioned';
+      }
+    }
+
+    if (!shouldRespond) return;
+
+    // Déclencher le moteur d'automatisation
+    try {
+      await fetch(`${this.aiRuntimeEndpoint}/api/automation/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: config.workspace_id,
+          agentId,
+          triggerType,
+          payload: {
+            group: { jid: groupJid, name: config.group_name },
+            sender: { phone: participantPhone, jid: participantJid, pushName: msg.pushName },
+            message: { text: textContent, id: msg.key?.id },
+          },
+        }),
+      });
+    } catch (err) {
+      console.error('[WA-Worker] Erreur dispatch automation groupe:', err);
+    }
   }
 }

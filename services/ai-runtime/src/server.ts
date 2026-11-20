@@ -6,7 +6,8 @@ import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import { AIOrchestrator } from './orchestrator.js';
 import { testProviderKey } from './adapters/index.js';
-import { AIProvider } from '@innoica/shared';
+import { AIProvider, compileNaturalInstruction, TriggerType } from '@innoica/shared';
+import { AutomationEngine } from './automation/engine.js';
 
 export function createAIRuntimeServer(orchestrator: AIOrchestrator): FastifyInstance {
   const app = Fastify({
@@ -97,6 +98,79 @@ export function createAIRuntimeServer(orchestrator: AIOrchestrator): FastifyInst
 
     const testResult = await testProviderKey(provider, apiKey);
     return reply.send(testResult);
+  });
+
+  // 3. Automation Engine Endpoints
+  const automationEngine = new AutomationEngine();
+
+  // 3.1 Compiler une consigne en langage naturel
+  app.post<{
+    Body: {
+      instruction: string;
+      agentId?: string;
+      preferredDomain?: any;
+      locale?: 'fr' | 'en';
+    };
+  }>('/api/automation/compile', async (request, reply) => {
+    const { instruction, agentId, preferredDomain, locale } = request.body;
+    if (!instruction) {
+      return reply.status(400).send({ error: 'Instruction requise' });
+    }
+    const result = compileNaturalInstruction(instruction, {
+      agentId,
+      preferredDomain,
+      locale,
+    });
+    return reply.send(result);
+  });
+
+  // 3.2 Vérifier si un message entrant réveille un workflow en attente (wait_for_message)
+  app.post<{
+    Body: {
+      agentId: string;
+      senderPhone: string;
+      messageText: string;
+    };
+  }>('/api/automation/check-waiting', async (request, reply) => {
+    const { agentId, senderPhone, messageText } = request.body;
+    if (!agentId || !senderPhone) {
+      return reply.status(400).send({ error: 'agentId et senderPhone requis' });
+    }
+    const resumedCount = await automationEngine.checkAndResumeWaitingWorkflows(
+      agentId,
+      senderPhone,
+      messageText || ''
+    );
+    return reply.send({ ok: true, resumedCount });
+  });
+
+  // 3.3 Déclencher un workflow d'automatisation
+  app.post<{
+    Body: {
+      workspaceId: string;
+      agentId?: string;
+      triggerType: TriggerType;
+      payload: Record<string, unknown>;
+      idempotencyKey?: string;
+    };
+  }>('/api/automation/dispatch', async (request, reply) => {
+    const { workspaceId, agentId, triggerType, payload, idempotencyKey } = request.body;
+    if (!workspaceId || !triggerType) {
+      return reply.status(400).send({ error: 'workspaceId et triggerType requis' });
+    }
+    try {
+      const executions = await automationEngine.dispatchEvent(
+        workspaceId,
+        agentId || null,
+        triggerType,
+        payload || {},
+        idempotencyKey
+      );
+      return reply.send({ ok: true, executionsCount: executions.length, executions });
+    } catch (err: any) {
+      request.log.error(err, 'Erreur dispatch automation');
+      return reply.status(500).send({ error: err.message || 'Erreur interne automation' });
+    }
   });
 
   return app;

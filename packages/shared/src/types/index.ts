@@ -376,3 +376,4 @@ export interface ExecutionLog {
 }
 
 export * from './ecommerce';
+export * from './automation';
